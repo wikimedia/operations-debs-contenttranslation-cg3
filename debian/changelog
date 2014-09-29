@@ -1,0 +1,5 @@
+cg3 (0.9.9~r10190-1) trusty; urgency=low
+
+  * Initial release (Closes: #475452)
+
+ -- Kartik Mistry <kartik@debian.org>  Mon, 06 Oct 2014 21:33:43 +0530
