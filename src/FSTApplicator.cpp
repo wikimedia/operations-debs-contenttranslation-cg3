@@ -89,10 +89,14 @@ void FSTApplicator::runGrammarOnText(istream& input, UFILE *output) {
 			for (size_t i=offset ; i<line.size() ; ++i) {
 				// Only copy one space character, regardless of how many are in input
 				if (ISSPACE(line[i]) && !ISNL(line[i])) {
-					cleaned[packoff++] = (line[i] == '\t' ? '\t' : ' ');
+					UChar space = (line[i] == '\t' ? '\t' : ' ');
 					while (ISSPACE(line[i]) && !ISNL(line[i])) {
+						if (line[i] == '\t') {
+							space = line[i];
+						}
 						++i;
 					}
+					cleaned[packoff++] = space;
 				}
 				// Break if there is a newline
 				if (ISNL(line[i])) {
@@ -117,13 +121,16 @@ gotaline:
 			cleaned[packoff-1] = 0;
 			--packoff;
 		}
-		if (!ignoreinput && cleaned[0] && cleaned[0] != '<') {
+		if (!ignoreinput && cleaned[0]) {
 			UChar *space = &cleaned[0];
-			SKIPTO_NOSPAN(space, '\t');
+			SKIPTO_NOSPAN_RAW(space, '\t');
 
 			if (space[0] != '\t') {
-				u_fprintf(ux_stderr, "Warning: %S on line %u looked like a cohort but wasn't - treated as text.\n", &cleaned[0], numLines);
-				u_fflush(ux_stderr);
+				// If this line looks like markup, don't warn about it
+				if (cleaned[0] != '<') {
+					u_fprintf(ux_stderr, "Warning: %S on line %u looked like a cohort but wasn't - treated as text.\n", &cleaned[0], numLines);
+					u_fflush(ux_stderr);
+				}
 				goto istext;
 			}
 			space[0] = 0;
@@ -153,7 +160,7 @@ gotaline:
 			}
 
 			++space;
-			while (space) {
+			while (space && (space[0] != '+' || space[1] != '?' || space[2] != 0)) {
 				cReading = new Reading(cCohort);
 				insert_if_exists(cReading->parent->possible_sets, grammar->sets_any);
 				addTagToReading(*cReading, cCohort->wordform);
@@ -217,6 +224,10 @@ gotaline:
 					cReading->baseform = cCohort->wordform->hash;
 					u_fprintf(ux_stderr, "Warning: Line %u had no valid baseform.\n", numLines);
 					u_fflush(ux_stderr);
+				}
+				if (single_tags[cReading->baseform]->tag.size() == 2) {
+					delTagFromReading(*cReading, cReading->baseform);
+					cReading->baseform = makeBaseFromWord(cCohort->wordform->hash)->hash;
 				}
 				if (!mappings.empty()) {
 					splitMappings(mappings, *cCohort, *cReading, true);
