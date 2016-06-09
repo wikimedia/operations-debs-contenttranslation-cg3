@@ -1,5 +1,54 @@
-cg3 (0.9.9~r10190-1) trusty; urgency=low
+cg3 (0.9.9~r11624-1+wmf1) jessie; urgency=low
+
+  * Rebuild for Jessie
+
+ -- Kartik Mistry <kartik@debian.org>  Thu, 09 Jun 2016 16:51:28 +0530
+
+cg3 (0.9.9~r11624-1) unstable; urgency=low
+
+  [ Tino Didriksen ]
+  * Updated to latest upstream from svn:
+    + Fixes assert failure and segfault.
+  * Disabled static libraries.
+
+  [ Kartik Mistry ]
+  * debian/control:
+    + Updated Standards-Version to 3.9.8
+
+ -- Kartik Mistry <kartik@debian.org>  Tue, 07 Jun 2016 09:02:35 +0530
+
+cg3 (0.9.9~r10793-1) unstable; urgency=low
+
+  * Updated to latest from svn.
+
+ -- Tino Didriksen <mail@tinodidriksen.com>  Sun, 21 Jun 2015 18:59:50 +0200
+
+cg3 (0.9.9~r10439-2) unstable; urgency=low
+
+  * debian/control:
+    + Fixed FTBFS on buildds. Thanks to Pino Toscano <pino@debian.org> for
+      patch (Closes: #789471)
+
+ -- Kartik Mistry <kartik@debian.org>  Sun, 21 Jun 2015 21:21:26 +0530
+
+cg3 (0.9.9~r10439-1) unstable; urgency=low
+
+  [ Tino Didriksen ]
+  * Updated to latest from svn.
+
+  [ Kartik Mistry ]
+  * Uploaded to unstable.
+
+ -- Kartik Mistry <kartik@debian.org>  Sat, 20 Jun 2015 21:53:32 +0530
+
+cg3 (0.9.9~r10195-1) experimental; urgency=low
+
+  * Updated to latest from svn
+
+ -- Tino Didriksen <mail@tinodidriksen.com>  Tue, 7 Oct 2014 14:36:01 +0000
+
+cg3 (0.9.9~r10190-1) experimental; urgency=low
 
   * Initial release (Closes: #475452)
 
- -- Kartik Mistry <kartik@debian.org>  Mon, 06 Oct 2014 21:33:43 +0530
+ -- Tino Didriksen <mail@tinodidriksen.com>  Fri, 3 Oct 2014 10:31:01 +0000
