@@ -443,6 +443,19 @@
     </para>
   </section>
 
+  <section id="keyword-options">
+    <title>OPTIONS</title>
+    <indexterm>
+      <primary>OPTIONS</primary>
+    </indexterm>
+    <para>
+      Global options that affect the grammar parsing.
+    </para>
+    <screen>
+      OPTIONS += no-inline-sets ;
+    </screen>
+  </section>
+
   <section id="keyword-preferred-targets">
     <title>PREFERRED-TARGETS</title>
     <indexterm>
@@ -676,6 +689,19 @@
     </para>
     <screen>
       STATIC-SETS = VINF ADV ;
+    </screen>
+  </section>
+
+  <section id="keyword-strict-tags">
+    <title>STRICT-TAGS</title>
+    <indexterm>
+      <primary>STRICT-TAGS</primary>
+    </indexterm>
+    <para>
+      A whitelist of allowed tags.
+    </para>
+    <screen>
+      STRICT-TAGS += N V ADJ ;
     </screen>
   </section>
 

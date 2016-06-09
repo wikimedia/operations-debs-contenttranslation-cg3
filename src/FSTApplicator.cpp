@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2014, GrammarSoft ApS
+* Copyright (C) 2007-2016, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -30,8 +30,12 @@
 namespace CG3 {
 
 FSTApplicator::FSTApplicator(UFILE *ux_err)
-	: GrammarApplicator(ux_err)
+  : GrammarApplicator(ux_err)
+  , wfactor(100.0)
 {
+	wtag += 'W';
+	sub_delims += '#';
+	//sub_delims += '+';
 }
 
 void FSTApplicator::runGrammarOnText(istream& input, UFILE *output) {
@@ -65,10 +69,12 @@ void FSTApplicator::runGrammarOnText(istream& input, UFILE *output) {
 	std::vector<UChar> cleaned(line.size(), 0);
 	bool ignoreinput = false;
 	bool did_soft_lookback = false;
+	UString wtag_buf;
+	Tag *wtag_tag;
 
 	index();
 
-	uint32_t resetAfter = ((num_windows+4)*2+1);
+	uint32_t resetAfter = ((num_windows + 4) * 2 + 1);
 	uint32_t lines = 0;
 
 	SingleWindow *cSWindow = 0;
@@ -84,9 +90,9 @@ void FSTApplicator::runGrammarOnText(istream& input, UFILE *output) {
 		++lines;
 		size_t offset = 0, packoff = 0;
 		// Read as much of the next line as will fit in the current buffer
-		while (input.gets(&line[offset], line.size()-offset-1)) {
+		while (input.gets(&line[offset], line.size() - offset - 1)) {
 			// Copy the segment just read to cleaned
-			for (size_t i=offset ; i<line.size() ; ++i) {
+			for (size_t i = offset; i < line.size(); ++i) {
 				// Only copy one space character, regardless of how many are in input
 				if (ISSPACE(line[i]) && !ISNL(line[i])) {
 					UChar space = (line[i] == '\t' ? '\t' : ' ');
@@ -100,25 +106,25 @@ void FSTApplicator::runGrammarOnText(istream& input, UFILE *output) {
 				}
 				// Break if there is a newline
 				if (ISNL(line[i])) {
-					cleaned[packoff+1] = cleaned[packoff] = 0;
+					cleaned[packoff + 1] = cleaned[packoff] = 0;
 					goto gotaline; // Oh how I wish C++ had break 2;
 				}
 				if (line[i] == 0) {
-					cleaned[packoff+1] = cleaned[packoff] = 0;
+					cleaned[packoff + 1] = cleaned[packoff] = 0;
 					break;
 				}
 				cleaned[packoff++] = line[i];
 			}
 			// If we reached this, buffer wasn't big enough. Double the size of the buffer and try again.
-			offset = line.size()-2;
-			line.resize(line.size()*2, 0);
-			cleaned.resize(line.size()+1, 0);
+			offset = line.size() - 2;
+			line.resize(line.size() * 2, 0);
+			cleaned.resize(line.size() + 1, 0);
 		}
 
-gotaline:
+	gotaline:
 		// Trim trailing whitespace
-		while (cleaned[0] && ISSPACE(cleaned[packoff-1])) {
-			cleaned[packoff-1] = 0;
+		while (cleaned[0] && ISSPACE(cleaned[packoff - 1])) {
+			cleaned[packoff - 1] = 0;
 			--packoff;
 		}
 		if (!ignoreinput && cleaned[0]) {
@@ -152,7 +158,7 @@ gotaline:
 					++numWindows;
 					did_soft_lookback = false;
 				}
-				cCohort = new Cohort(cSWindow);
+				cCohort = alloc_cohort(cSWindow);
 				cCohort->global_number = gWindow->cohort_counter++;
 				cCohort->wordform = addTag(tag);
 				lCohort = cCohort;
@@ -161,28 +167,69 @@ gotaline:
 
 			++space;
 			while (space && (space[0] != '+' || space[1] != '?' || space[2] != 0)) {
-				cReading = new Reading(cCohort);
+				cReading = alloc_reading(cCohort);
 				insert_if_exists(cReading->parent->possible_sets, grammar->sets_any);
 				addTagToReading(*cReading, cCohort->wordform);
 
 				const UChar *base = space;
 				TagList mappings;
 
+				wtag_tag = 0;
+				double weight = 0.0;
 				UChar *tab = u_strchr(space, '\t');
 				if (tab) {
 					tab[0] = 0;
+					++tab;
+					UChar *comma = u_strchr(tab, ',');
+					if (comma) {
+						comma[0] = '.';
+					}
+					char buf[32];
+					size_t i = 0;
+					for (; i < 31 && tab[i]; ++i) {
+						buf[i] = static_cast<char>(tab[i]);
+					}
+					buf[i] = 0;
+					if (strcmp(buf, "inf") == 0) {
+						i = sprintf(buf, "%d", std::numeric_limits<int32_t>::max());
+					}
+					else {
+						weight = strtof(buf, 0);
+						weight *= wfactor;
+						i = sprintf(buf, "%.0f", weight);
+					}
+					wtag_buf.clear();
+					wtag_buf.reserve(wtag.size() + i + 3);
+					wtag_buf += '<';
+					wtag_buf += wtag;
+					wtag_buf += ':';
+					std::copy(buf, buf + i, std::back_inserter(wtag_buf));
+					wtag_buf += '>';
+					wtag_tag = addTag(wtag_buf);
+				}
+
+				// Initial baseform, because it may end on +
+				UChar *plus = u_strchr(space, '+');
+				if (plus) {
+					++plus;
+					const UChar cplus[] = { '+', 0 };
+					int32_t p = u_strspn(plus, cplus);
+					space = plus + p;
+					--space;
 				}
 
 				while (space && *space && (space = u_strchr(space, '+')) != 0) {
 					if (base && base[0]) {
+						int32_t f = u_strcspn(base, sub_delims.c_str());
 						UChar *hash = 0;
-						if ((hash = u_strchr(base, '#')) != 0 && hash != base && hash < space) {
+						if (f && base + f < space) {
+							hash = const_cast<UChar*>(base) + f;
 							size_t oh = hash - &cleaned[0];
 							size_t ob = base - &cleaned[0];
-							cleaned.resize(cleaned.size()+1, 0);
+							cleaned.resize(cleaned.size() + 1, 0);
 							hash = &cleaned[oh];
 							base = &cleaned[ob];
-							std::copy_backward(hash, &cleaned[cleaned.size()-2], &cleaned[cleaned.size()-1]);
+							std::copy_backward(hash, &cleaned[cleaned.size() - 2], &cleaned[cleaned.size() - 1]);
 							hash[0] = 0;
 							space = hash;
 						}
@@ -200,6 +247,15 @@ gotaline:
 						}
 						else {
 							addTagToReading(*cReading, tag);
+						}
+						if (hash && hash[0] == 0) {
+							if (wtag_tag) {
+								addTagToReading(*cReading, wtag_tag);
+							}
+							Reading *nr = cReading->allocateReading(cReading->parent);
+							nr->next = cReading;
+							cReading = nr;
+							++space;
 						}
 					}
 					base = ++space;
@@ -220,6 +276,9 @@ gotaline:
 						addTagToReading(*cReading, tag);
 					}
 				}
+				if (wtag_tag) {
+					addTagToReading(*cReading, wtag_tag);
+				}
 				if (!cReading->baseform) {
 					cReading->baseform = cCohort->wordform->hash;
 					u_fprintf(ux_stderr, "Warning: Line %u had no valid baseform.\n", numLines);
@@ -232,19 +291,22 @@ gotaline:
 				if (!mappings.empty()) {
 					splitMappings(mappings, *cCohort, *cReading, true);
 				}
+				if (grammar->sub_readings_ltr && cReading->next) {
+					cReading = reverse(cReading);
+				}
 				cCohort->appendReading(cReading);
 				++numReadings;
 			}
 		}
 		else {
-istext:
+		istext:
 			if (cCohort && cCohort->readings.empty()) {
 				initEmptyCohort(*cCohort);
 			}
 			if (cSWindow && cSWindow->cohorts.size() >= soft_limit && grammar->soft_delimiters && !did_soft_lookback) {
 				did_soft_lookback = true;
-				reverse_foreach (CohortVector, cSWindow->cohorts, iter, iter_end) {
-					if (doesSetMatchCohortNormal(**iter, grammar->soft_delimiters->hash)) {
+				reverse_foreach (iter, cSWindow->cohorts) {
+					if (doesSetMatchCohortNormal(**iter, grammar->soft_delimiters->number)) {
 						did_soft_lookback = false;
 						Cohort *cohort = delimitAt(*cSWindow, *iter);
 						cSWindow = cohort->parent->next;
@@ -259,12 +321,12 @@ istext:
 					}
 				}
 			}
-			if (cCohort && cSWindow->cohorts.size() >= soft_limit && grammar->soft_delimiters && doesSetMatchCohortNormal(*cCohort, grammar->soft_delimiters->hash)) {
+			if (cCohort && cSWindow->cohorts.size() >= soft_limit && grammar->soft_delimiters && doesSetMatchCohortNormal(*cCohort, grammar->soft_delimiters->number)) {
 				if (verbosity_level > 0) {
 					u_fprintf(ux_stderr, "Warning: Soft limit of %u cohorts reached at line %u but found suitable soft delimiter.\n", soft_limit, numLines);
 					u_fflush(ux_stderr);
 				}
-				foreach (ReadingList, cCohort->readings, iter, iter_end) {
+				foreach (iter, cCohort->readings) {
 					addTagToReading(**iter, endtag);
 				}
 
@@ -274,12 +336,12 @@ istext:
 				cSWindow = 0;
 				did_soft_lookback = false;
 			}
-			if (cCohort && (cSWindow->cohorts.size() >= hard_limit || (!dep_delimit && grammar->delimiters && doesSetMatchCohortNormal(*cCohort, grammar->delimiters->hash)))) {
-				if (cSWindow->cohorts.size() >= hard_limit) {
+			if (cCohort && (cSWindow->cohorts.size() >= hard_limit || (!dep_delimit && grammar->delimiters && doesSetMatchCohortNormal(*cCohort, grammar->delimiters->number)))) {
+				if (!is_conv && cSWindow->cohorts.size() >= hard_limit) {
 					u_fprintf(ux_stderr, "Warning: Hard limit of %u cohorts reached at line %u - forcing break.\n", hard_limit, numLines);
 					u_fflush(ux_stderr);
 				}
-				foreach (ReadingList, cCohort->readings, iter, iter_end) {
+				foreach (iter, cCohort->readings) {
 					addTagToReading(**iter, endtag);
 				}
 
@@ -308,8 +370,8 @@ istext:
 				while (!gWindow->previous.empty() && gWindow->previous.size() > num_windows) {
 					SingleWindow *tmp = gWindow->previous.front();
 					printSingleWindow(tmp, output);
-					delete tmp;
-					gWindow->previous.pop_front();
+					free_swindow(tmp);
+					gWindow->previous.erase(gWindow->previous.begin());
 				}
 				gWindow->shuffleWindowsDown();
 				runGrammarOnWindow();
@@ -345,7 +407,7 @@ istext:
 		if (cCohort->readings.empty()) {
 			initEmptyCohort(*cCohort);
 		}
-		foreach (ReadingList, cCohort->readings, iter, iter_end) {
+		foreach (iter, cCohort->readings) {
 			addTagToReading(**iter, endtag);
 		}
 		cReading = 0;
@@ -356,8 +418,8 @@ istext:
 		while (!gWindow->previous.empty() && gWindow->previous.size() > num_windows) {
 			SingleWindow *tmp = gWindow->previous.front();
 			printSingleWindow(tmp, output);
-			delete tmp;
-			gWindow->previous.pop_front();
+			free_swindow(tmp);
+			gWindow->previous.erase(gWindow->previous.begin());
 		}
 		gWindow->shuffleWindowsDown();
 		runGrammarOnWindow();
@@ -367,11 +429,10 @@ istext:
 	while (!gWindow->previous.empty()) {
 		SingleWindow *tmp = gWindow->previous.front();
 		printSingleWindow(tmp, output);
-		delete tmp;
-		gWindow->previous.pop_front();
+		free_swindow(tmp);
+		gWindow->previous.erase(gWindow->previous.begin());
 	}
 
 	u_fflush(output);
 }
-
 }

@@ -147,10 +147,14 @@
     </section>
 
     <section id="test-mark-attach-to">
-      <title>Attach To</title>
+      <title>Attach To / Affect Instead</title>
       <para>
         'A' sets the cohort to be attached or related against to the currently active cohort of the test's target.
         See also <link linkend="set-attachto">magic set _ATTACHTO_</link>.
+      </para>
+      <para>
+        As of version 0.9.9.11032, 'A' can be used for almost all rules to change the cohort to be affected,
+        instead of the target of the rule.
       </para>
     </section>
   </section>
@@ -269,6 +273,40 @@
       (0* (someset))
       (0**W (otherset))
     </screen>
+  </section>
+
+  <section id="test-bag-of-tags">
+    <title>Bag of Tags</title>
+    <indexterm>
+      <primary>B</primary>
+    </indexterm>
+    <para>
+      Position modifier 'B' causes the test to look in a bag of tags, which is like a bag of words but with all
+      tags. 'B' alone looks for tags in the current window, but can be combined with the
+      <link linkend="test-spanning">window spanning modifiers</link> to also test the windows before and/or after.
+      Linking from a 'B' test behaves as if you linked from offset 0.
+    </para>
+    <para>
+      The bag is greedy and lazy. It will hold all tags added to the window at any time, but will not forget
+      tags as they are removed from the window through various means.
+    </para>
+  </section>
+
+  <section id="test-branch">
+    <title>Optional Frequencies</title>
+    <indexterm>
+      <primary>f</primary>
+    </indexterm>
+    <para>
+      Position modifer 'f' creates two branches based on the current test. In the first, the test remains exactly as
+      is written. In the second, all <link linkend="numerical-matches">numeric tags</link> are removed and
+      modifier 'C' is added. This is equivalent to making an inline template with OR'ed tests.
+    </para>
+    <para>
+      E.g., test <code>(-1*f (N &lt;W>50&gt;))</code> is equivalent to <code>(-1* (N &lt;W>50&gt;)) OR (-1*C (N))</code>.
+      This is all done at compile time.
+      The numeric tag removal will dig down through the whole target set and create new sets along the way as needed.
+    </para>
   </section>
 
   <section id="test-dependency">

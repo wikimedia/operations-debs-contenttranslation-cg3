@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2014, GrammarSoft ApS
+* Copyright (C) 2007-2016, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -26,39 +26,38 @@
 #include "stdafx.hpp"
 
 namespace CG3 {
-	class GrammarApplicator;
-	class Cohort;
-	class SingleWindow;
+class GrammarApplicator;
+class Cohort;
+class SingleWindow;
 
-	typedef std::list<SingleWindow*> SingleWindowCont;
+typedef std::vector<SingleWindow*> SingleWindowCont;
 
-	class Window {
-	public:
-		GrammarApplicator *parent;
-		uint32_t cohort_counter;
-		uint32_t window_counter;
-		uint32_t window_span;
+class Window {
+public:
+	GrammarApplicator *parent;
+	uint32_t cohort_counter;
+	uint32_t window_counter;
+	uint32_t window_span;
 
-		std::map<uint32_t, Cohort*> cohort_map;
-		uint32FlatHashMap dep_map;
-		std::map<uint32_t, Cohort*> dep_window;
-		uint32FlatHashMap relation_map;
+	std::map<uint32_t, Cohort*> cohort_map;
+	uint32FlatHashMap dep_map;
+	std::map<uint32_t, Cohort*> dep_window;
+	uint32FlatHashMap relation_map;
 
-		SingleWindowCont previous;
-		SingleWindow *current;
-		SingleWindowCont next;
+	SingleWindowCont previous;
+	SingleWindow *current;
+	SingleWindowCont next;
 
-		Window(GrammarApplicator *p);
-		~Window();
+	Window(GrammarApplicator *p);
+	~Window();
 
-		SingleWindow *allocSingleWindow();
-		SingleWindow *allocPushSingleWindow();
-		SingleWindow *allocAppendSingleWindow();
-		void shuffleWindowsDown();
-		void rebuildSingleWindowLinks();
-		void rebuildCohortLinks();
-	};
-
+	SingleWindow *allocSingleWindow();
+	SingleWindow *allocPushSingleWindow();
+	SingleWindow *allocAppendSingleWindow();
+	void shuffleWindowsDown();
+	void rebuildSingleWindowLinks();
+	void rebuildCohortLinks();
+};
 }
 
 #endif

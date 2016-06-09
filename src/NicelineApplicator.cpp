@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2014, GrammarSoft ApS
+* Copyright (C) 2007-2016, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -30,9 +30,9 @@
 namespace CG3 {
 
 NicelineApplicator::NicelineApplicator(UFILE *ux_err)
-	: GrammarApplicator(ux_err),
-	did_warn_statictags(false),
-	did_warn_subreadings(false)
+  : GrammarApplicator(ux_err)
+  , did_warn_statictags(false)
+  , did_warn_subreadings(false)
 {
 }
 
@@ -70,7 +70,7 @@ void NicelineApplicator::runGrammarOnText(istream& input, UFILE *output) {
 
 	index();
 
-	uint32_t resetAfter = ((num_windows+4)*2+1);
+	uint32_t resetAfter = ((num_windows + 4) * 2 + 1);
 	uint32_t lines = 0;
 
 	SingleWindow *cSWindow = 0;
@@ -86,40 +86,40 @@ void NicelineApplicator::runGrammarOnText(istream& input, UFILE *output) {
 		++lines;
 		size_t offset = 0, packoff = 0;
 		// Read as much of the next line as will fit in the current buffer
-		while (input.gets(&line[offset], line.size()-offset-1)) {
+		while (input.gets(&line[offset], line.size() - offset - 1)) {
 			// Copy the segment just read to cleaned
-			for (size_t i=offset ; i<line.size() ; ++i) {
+			for (size_t i = offset; i < line.size(); ++i) {
 				// Only copy one space character, regardless of how many are in input
 				if (ISSPACE(line[i]) && !ISNL(line[i])) {
 					cleaned[packoff++] = (line[i] == '\t' ? '\t' : ' ');
 					while (ISSPACE(line[i]) && !ISNL(line[i])) {
 						if (line[i] == '\t') {
-							cleaned[packoff-1] = line[i];
+							cleaned[packoff - 1] = line[i];
 						}
 						++i;
 					}
 				}
 				// Break if there is a newline
 				if (ISNL(line[i])) {
-					cleaned[packoff+1] = cleaned[packoff] = 0;
+					cleaned[packoff + 1] = cleaned[packoff] = 0;
 					goto gotaline; // Oh how I wish C++ had break 2;
 				}
 				if (line[i] == 0) {
-					cleaned[packoff+1] = cleaned[packoff] = 0;
+					cleaned[packoff + 1] = cleaned[packoff] = 0;
 					break;
 				}
 				cleaned[packoff++] = line[i];
 			}
 			// If we reached this, buffer wasn't big enough. Double the size of the buffer and try again.
-			offset = line.size()-2;
-			line.resize(line.size()*2, 0);
-			cleaned.resize(line.size()+2, 0);
+			offset = line.size() - 2;
+			line.resize(line.size() * 2, 0);
+			cleaned.resize(line.size() + 2, 0);
 		}
 
-gotaline:
+	gotaline:
 		// Trim trailing whitespace
-		while (cleaned[0] && ISSPACE(cleaned[packoff-1])) {
-			cleaned[packoff-1] = 0;
+		while (cleaned[0] && ISSPACE(cleaned[packoff - 1])) {
+			cleaned[packoff - 1] = 0;
 			--packoff;
 		}
 		if (!ignoreinput && cleaned[0] && cleaned[0] != '<') {
@@ -138,8 +138,8 @@ gotaline:
 
 			if (cSWindow && cSWindow->cohorts.size() >= soft_limit && grammar->soft_delimiters && !did_soft_lookback) {
 				did_soft_lookback = true;
-				reverse_foreach (CohortVector, cSWindow->cohorts, iter, iter_end) {
-					if (doesSetMatchCohortNormal(**iter, grammar->soft_delimiters->hash)) {
+				reverse_foreach (iter, cSWindow->cohorts) {
+					if (doesSetMatchCohortNormal(**iter, grammar->soft_delimiters->number)) {
 						did_soft_lookback = false;
 						Cohort *cohort = delimitAt(*cSWindow, *iter);
 						cSWindow = cohort->parent->next;
@@ -154,12 +154,12 @@ gotaline:
 					}
 				}
 			}
-			if (cCohort && cSWindow->cohorts.size() >= soft_limit && grammar->soft_delimiters && doesSetMatchCohortNormal(*cCohort, grammar->soft_delimiters->hash)) {
+			if (cCohort && cSWindow->cohorts.size() >= soft_limit && grammar->soft_delimiters && doesSetMatchCohortNormal(*cCohort, grammar->soft_delimiters->number)) {
 				if (verbosity_level > 0) {
 					u_fprintf(ux_stderr, "Warning: Soft limit of %u cohorts reached at line %u but found suitable soft delimiter.\n", soft_limit, numLines);
 					u_fflush(ux_stderr);
 				}
-				foreach (ReadingList, cCohort->readings, iter, iter_end) {
+				foreach (iter, cCohort->readings) {
 					addTagToReading(**iter, endtag);
 				}
 
@@ -170,12 +170,12 @@ gotaline:
 				numCohorts++;
 				did_soft_lookback = false;
 			}
-			if (cCohort && (cSWindow->cohorts.size() >= hard_limit || (!dep_delimit && grammar->delimiters && doesSetMatchCohortNormal(*cCohort, grammar->delimiters->hash)))) {
-				if (cSWindow->cohorts.size() >= hard_limit) {
+			if (cCohort && (cSWindow->cohorts.size() >= hard_limit || (!dep_delimit && grammar->delimiters && doesSetMatchCohortNormal(*cCohort, grammar->delimiters->number)))) {
+				if (!is_conv && cSWindow->cohorts.size() >= hard_limit) {
 					u_fprintf(ux_stderr, "Warning: Hard limit of %u cohorts reached at line %u - forcing break.\n", hard_limit, numLines);
 					u_fflush(ux_stderr);
 				}
-				foreach (ReadingList, cCohort->readings, iter, iter_end) {
+				foreach (iter, cCohort->readings) {
 					addTagToReading(**iter, endtag);
 				}
 
@@ -203,8 +203,8 @@ gotaline:
 				while (!gWindow->previous.empty() && gWindow->previous.size() > num_windows) {
 					SingleWindow *tmp = gWindow->previous.front();
 					printSingleWindow(tmp, output);
-					delete tmp;
-					gWindow->previous.pop_front();
+					free_swindow(tmp);
+					gWindow->previous.erase(gWindow->previous.begin());
 				}
 				gWindow->shuffleWindowsDown();
 				runGrammarOnWindow();
@@ -224,7 +224,7 @@ gotaline:
 			tag += '>';
 			tag += '"';
 
-			cCohort = new Cohort(cSWindow);
+			cCohort = alloc_cohort(cSWindow);
 			cCohort->global_number = gWindow->cohort_counter++;
 			cCohort->wordform = addTag(tag);
 			lCohort = cCohort;
@@ -232,7 +232,7 @@ gotaline:
 
 			++space;
 			while (space && space[0]) {
-				cReading = new Reading(cCohort);
+				cReading = alloc_reading(cCohort);
 				insert_if_exists(cReading->parent->possible_sets, grammar->sets_any);
 
 				UChar *base = space;
@@ -306,7 +306,7 @@ gotaline:
 			}
 		}
 		else {
-istext:
+		istext:
 			if (cleaned[0] && line[0]) {
 				if (lCohort) {
 					lCohort->text += &line[0];
@@ -328,7 +328,7 @@ istext:
 		if (cCohort->readings.empty()) {
 			initEmptyCohort(*cCohort);
 		}
-		foreach (ReadingList, cCohort->readings, iter, iter_end) {
+		foreach (iter, cCohort->readings) {
 			addTagToReading(**iter, endtag);
 		}
 		cReading = 0;
@@ -339,8 +339,8 @@ istext:
 		while (!gWindow->previous.empty() && gWindow->previous.size() > num_windows) {
 			SingleWindow *tmp = gWindow->previous.front();
 			printSingleWindow(tmp, output);
-			delete tmp;
-			gWindow->previous.pop_front();
+			free_swindow(tmp);
+			gWindow->previous.erase(gWindow->previous.begin());
 		}
 		gWindow->shuffleWindowsDown();
 		runGrammarOnWindow();
@@ -350,8 +350,8 @@ istext:
 	while (!gWindow->previous.empty()) {
 		SingleWindow *tmp = gWindow->previous.front();
 		printSingleWindow(tmp, output);
-		delete tmp;
-		gWindow->previous.pop_front();
+		free_swindow(tmp);
+		gWindow->previous.erase(gWindow->previous.begin());
 	}
 
 	u_fflush(output);
@@ -366,11 +366,11 @@ void NicelineApplicator::printReading(const Reading *reading, UFILE *output) {
 	}
 	u_fputc('\t', output);
 	if (reading->baseform) {
-		u_fprintf(output, "[%.*S]", single_tags.find(reading->baseform)->second->tag.size()-2, single_tags.find(reading->baseform)->second->tag.c_str() + 1);
+		u_fprintf(output, "[%.*S]", single_tags.find(reading->baseform)->second->tag.size() - 2, single_tags.find(reading->baseform)->second->tag.c_str() + 1);
 	}
 
 	uint32SortedVector unique;
-	const_foreach (Reading::tags_list_t, reading->tags_list, tter, tter_end) {
+	foreach (tter, reading->tags_list) {
 		if ((!show_end_tags && *tter == endtag) || *tter == begintag) {
 			continue;
 		}
@@ -399,7 +399,7 @@ void NicelineApplicator::printReading(const Reading *reading, UFILE *output) {
 		}
 		const Cohort *pr = 0;
 		pr = reading->parent;
-		if (reading->parent->dep_parent != std::numeric_limits<uint32_t>::max()) {
+		if (reading->parent->dep_parent != DEP_NO_PARENT) {
 			if (reading->parent->dep_parent == 0) {
 				pr = reading->parent->parent->cohorts[0];
 			}
@@ -416,19 +416,19 @@ void NicelineApplicator::printReading(const Reading *reading, UFILE *output) {
 		}
 		if (!dep_has_spanned) {
 			u_fprintf_u(output, pattern,
-				reading->parent->local_number,
-				pr->local_number);
+			  reading->parent->local_number,
+			  pr->local_number);
 		}
 		else {
-			if (reading->parent->dep_parent == std::numeric_limits<uint32_t>::max()) {
+			if (reading->parent->dep_parent == DEP_NO_PARENT) {
 				u_fprintf_u(output, pattern,
-					reading->parent->dep_self,
-					reading->parent->dep_self);
+				  reading->parent->dep_self,
+				  reading->parent->dep_self);
 			}
 			else {
 				u_fprintf_u(output, pattern,
-					reading->parent->dep_self,
-					reading->parent->dep_parent);
+				  reading->parent->dep_self,
+				  reading->parent->dep_parent);
 			}
 		}
 	}
@@ -436,7 +436,7 @@ void NicelineApplicator::printReading(const Reading *reading, UFILE *output) {
 	if (reading->parent->type & CT_RELATED) {
 		u_fprintf(output, " ID:%u", reading->parent->global_number);
 		if (!reading->parent->relations.empty()) {
-			foreach (RelationCtn, reading->parent->relations, miter, miter_end) {
+			foreach (miter, reading->parent->relations) {
 				boost_foreach (uint32_t siter, miter->second) {
 					u_fprintf(output, " R:%S:%u", grammar->single_tags.find(miter->first)->second->tag.c_str(), siter);
 				}
@@ -445,7 +445,7 @@ void NicelineApplicator::printReading(const Reading *reading, UFILE *output) {
 	}
 
 	if (trace) {
-		const_foreach (uint32Vector, reading->hit_by, iter_hb, iter_hb_end) {
+		foreach (iter_hb, reading->hit_by) {
 			u_fputc(' ', output);
 			printTrace(output, *iter_hb);
 		}
@@ -468,14 +468,16 @@ void NicelineApplicator::printCohort(Cohort *cohort, UFILE *output) {
 		goto removed;
 	}
 
-	u_fprintf(output, "%.*S", cohort->wordform->tag.size()-4, cohort->wordform->tag.c_str()+2);
+	u_fprintf(output, "%.*S", cohort->wordform->tag.size() - 4, cohort->wordform->tag.c_str() + 2);
 	if (cohort->wread && !did_warn_statictags) {
 		u_fprintf(ux_stderr, "Warning: Niceline CG format cannot output static tags! You are losing information!\n");
 		u_fflush(ux_stderr);
 		did_warn_statictags = true;
 	}
 
-	mergeMappings(*cohort);
+	if (!split_mappings) {
+		mergeMappings(*cohort);
+	}
 
 	if (cohort->readings.empty()) {
 		u_fputc('\t', output);
@@ -510,5 +512,4 @@ void NicelineApplicator::printSingleWindow(SingleWindow *window, UFILE *output) 
 	u_fputc('\n', output);
 	u_fflush(output);
 }
-
 }

@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2014, GrammarSoft ApS
+* Copyright (C) 2007-2016, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -51,15 +51,15 @@ public:
 	public:
 		typedef value_type reference;
 
-		const_iterator() :
-			fus(0),
-			i(0)
+		const_iterator()
+		  : fus(0)
+		  , i(0)
 		{
 		}
 
-		const_iterator(const flat_unordered_map& fus, size_t i = 0) :
-			fus(&fus),
-			i(i)
+		const_iterator(const flat_unordered_map& fus, size_t i = 0)
+		  : fus(&fus)
+		  , i(i)
 		{
 		}
 
@@ -109,7 +109,7 @@ public:
 			return fus->elements[i];
 		}
 
-		const value_type_real* operator->() const {
+		const value_type_real *operator->() const {
 			return &fus->elements[i];
 		}
 	};
@@ -117,33 +117,44 @@ public:
 	typedef const_iterator iterator;
 
 	enum {
-		DEFAULT_CAP = static_cast<size_type>(16u)
+		DEFAULT_CAP = static_cast<size_type>(16u),
 	};
 
-	flat_unordered_map() :
-		size_(0)
+	flat_unordered_map()
+	  : size_(0)
 	{
 	}
 
 	size_t insert(const value_type& t) {
 		assert(t.first != res_empty && t.first != res_del && "Key cannot be res_empty or res_del!");
 
-		if (size_ + 1 >= capacity() / 2) {
+		if ((size_ + 1) * 3 / 2 >= capacity() / 2) {
 			reserve(std::max(static_cast<size_type>(DEFAULT_CAP), capacity() * 2));
 		}
 		size_t max = capacity() - 1;
-		size_t spot = t.first & max;
-		while (elements[spot].first != res_empty) {
+		size_t spot = hash_value(t.first) & max;
+		while (elements[spot].first != res_empty && elements[spot].first != t.first) {
 			spot = (spot + 5) & max;
 		}
-		elements[spot] = t;
-		++size_;
+		if (elements[spot].first != t.first) {
+			elements[spot] = t;
+			++size_;
+		}
 		return spot;
 	}
 
 	template<typename It>
 	void insert(It b, It e) {
-		for (; b != e ; ++b) {
+		size_t d = std::distance(b, e);
+		size_t c = capacity();
+		while ((size_ + d) * 3 / 2 >= c / 2) {
+			c = std::max(static_cast<size_type>(DEFAULT_CAP), c * 2);
+		}
+		if (c != capacity()) {
+			reserve(c);
+		}
+
+		for (; b != e; ++b) {
 			insert(*b);
 		}
 	}
@@ -155,13 +166,14 @@ public:
 			return;
 		}
 		size_t max = capacity() - 1;
-		size_t spot = t & max;
+		size_t spot = hash_value(t) & max;
 		while (elements[spot].first != res_empty && elements[spot].first != t) {
 			spot = (spot + 5) & max;
 		}
 		if (elements[spot].first == t) {
 			elements[spot].first = res_del;
 			elements[spot].second = V();
+			--size_;
 		}
 	}
 
@@ -169,6 +181,7 @@ public:
 		elements[it.i].first = res_del;
 		elements[it.i].second = V();
 		++it;
+		--size_;
 		return it;
 	}
 
@@ -179,7 +192,7 @@ public:
 
 		if (size_) {
 			size_t max = capacity() - 1;
-			size_t spot = t & max;
+			size_t spot = hash_value(t) & max;
 			while (elements[spot].first != res_empty && elements[spot].first != t) {
 				spot = (spot + 5) & max;
 			}
@@ -202,7 +215,7 @@ public:
 		size_t at = std::numeric_limits<size_t>::max();
 		if (size_) {
 			size_t max = capacity() - 1;
-			size_t spot = t & max;
+			size_t spot = hash_value(t) & max;
 			while (elements[spot].first != res_empty && elements[spot].first != t) {
 				spot = (spot + 5) & max;
 			}
@@ -247,7 +260,8 @@ public:
 			return;
 		}
 
-		container vals;
+		static container vals;
+		vals.resize(0);
 		vals.reserve(size_);
 		for (size_type i = 0, ie = capacity(); i < ie; ++i) {
 			if (elements[i].first != res_empty && elements[i].first != res_del) {
@@ -259,8 +273,8 @@ public:
 		size_ = vals.size();
 		size_t max = capacity() - 1;
 		for (size_type i = 0, ie = vals.size(); i < ie; ++i) {
-			size_t spot = vals[i].first & max;
-			while (elements[spot].first != res_empty) {
+			size_t spot = hash_value(vals[i].first) & max;
+			while (elements[spot].first != res_empty && elements[spot].first != vals[i].first) {
 				spot = (spot + 5) & max;
 			}
 			elements[spot] = vals[i];
@@ -284,7 +298,7 @@ public:
 
 	void clear(size_type n = 0) {
 		size_ = elements.size();
-		elements.clear();
+		elements.resize(0);
 		elements.resize(std::max(size_, n), std::make_pair(res_empty, V()));
 		size_ = 0;
 	}
@@ -297,11 +311,14 @@ private:
 	size_type size_;
 	container elements;
 
+	T hash_value(T t) const {
+		return (t << 8) | ((t >> 8) & 0xFF);
+	}
+
 	friend class const_iterator;
 };
 
-typedef flat_unordered_map<uint32_t,uint32_t> uint32FlatHashMap;
-
+typedef flat_unordered_map<uint32_t, uint32_t> uint32FlatHashMap;
 }
 
 #endif

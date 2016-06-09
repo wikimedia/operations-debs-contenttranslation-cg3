@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2014, GrammarSoft ApS
+* Copyright (C) 2007-2016, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -28,78 +28,83 @@
 #include "sorted_vector.hpp"
 
 namespace CG3 {
-	class Grammar;
+class Grammar;
 
-	enum {
-		ST_ANY             = (1 <<  0),
-		ST_SPECIAL         = (1 <<  1),
-		ST_TAG_UNIFY       = (1 <<  2),
-		ST_SET_UNIFY       = (1 <<  3),
-		ST_CHILD_UNIFY     = (1 <<  4),
-		ST_MAPPING         = (1 <<  5),
-		ST_USED            = (1 <<  6),
-		ST_STATIC          = (1 <<  7),
-	};
+enum {
+	ST_ANY         = (1 <<  0),
+	ST_SPECIAL     = (1 <<  1),
+	ST_TAG_UNIFY   = (1 <<  2),
+	ST_SET_UNIFY   = (1 <<  3),
+	ST_CHILD_UNIFY = (1 <<  4),
+	ST_MAPPING     = (1 <<  5),
+	ST_USED        = (1 <<  6),
+	ST_STATIC      = (1 <<  7),
 
-	class Set {
-	public:
-		static UFILE* dump_hashes_out;
+	MASK_ST_UNIFY  = ST_TAG_UNIFY | ST_SET_UNIFY | ST_CHILD_UNIFY,
+};
 
-		uint8_t type;
-		uint32_t line;
-		uint32_t hash;
-		uint32_t number;
-		mutable uint32_t num_fail, num_match;
-		mutable double total_time;
-		UString name;
+class Set {
+public:
+	static UFILE *dump_hashes_out;
 
-		trie_t trie;
-		trie_t trie_special;
-		TagSortedVector ff_tags;
+	uint8_t type;
+	uint32_t line;
+	uint32_t hash;
+	uint32_t number;
+	mutable uint32_t num_fail, num_match;
+	mutable double total_time;
+	UString name;
 
-		uint32Vector set_ops;
-		uint32Vector sets;
+	trie_t trie;
+	trie_t trie_special;
+	TagSortedVector ff_tags;
 
-		Set();
-		~Set() {
-			trie_delete(trie);
-			trie_delete(trie_special);
+	uint32Vector set_ops;
+	uint32Vector sets;
+
+	Set();
+	~Set() {
+		trie_delete(trie);
+		trie_delete(trie_special);
+	}
+
+	void setName(uint32_t to = 0);
+	void setName(const UChar *to);
+	void setName(const UString& to);
+
+	bool empty() const;
+	uint32_t rehash();
+	void resetStatistics();
+	void reindex(Grammar& grammar);
+	void markUsed(Grammar& grammar);
+
+	trie_t& getNonEmpty() {
+		if (!trie.empty()) {
+			return trie;
 		}
+		return trie_special;
+	}
+};
 
-		void setName(uint32_t to = 0);
-		void setName(const UChar *to);
-		void setName(const UString& to);
+typedef sorted_vector<Set*> SetSet;
+typedef std::vector<Set*> SetVector;
+typedef stdext::hash_map<uint32_t, Set*> Setuint32HashMap;
 
-		bool empty() const;
-		uint32_t rehash();
-		void resetStatistics();
-		void reindex(Grammar& grammar);
-		void markUsed(Grammar& grammar);
-
-		trie_t& getNonEmpty() {
-			if (!trie.empty()) {
-				return trie;
-			}
-			return trie_special;
+inline uint8_t trie_reindex(const trie_t& trie) {
+	uint8_t type = 0;
+	boost_foreach (const trie_t::value_type& kv, trie) {
+		if (kv.first->type & T_SPECIAL) {
+			type |= ST_SPECIAL;
 		}
-	};
-
-	struct compare_Set {
-		static const size_t bucket_size = 4;
-		static const size_t min_buckets = 8;
-
-		inline size_t operator() (const Set* x) const {
-			return x->hash;
+		if (kv.first->type & T_MAPPING) {
+			type |= ST_MAPPING;
 		}
-
-		inline bool operator() (const Set* a, const Set* b) const {
-			return a->hash < b->hash;
+		if (kv.second.trie) {
+			type |= trie_reindex(*kv.second.trie);
 		}
-	};
-
-	typedef sorted_vector<Set*> SetSet;
-	typedef std::vector<Set*> SetVector;
-	typedef stdext::hash_map<uint32_t,Set*> Setuint32HashMap;
+	}
+	return type;
+}
 }
 
 #endif

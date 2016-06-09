@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2014, GrammarSoft ApS
+* Copyright (C) 2007-2016, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -24,13 +24,12 @@
 #define c6d28b7452ec699b_STDAFX_H
 
 #ifdef _MSC_VER
-	// warning C4428: universal-character-name encountered in source
-	#pragma warning (disable: 4428)
 	// warning C4512: assignment operator could not be generated
 	#pragma warning (disable: 4512)
-	// warning C4480: nonstandard extension used: specifying underlying type for enum
-	// 'cause that is actually standard in C++11
-	#pragma warning (disable: 4480)
+	// warning C4456: declaration hides previous local declaration
+	#pragma warning (disable: 4456)
+	// warning C4458: declaration hides class member
+	#pragma warning (disable: 4458)
 #endif
 
 #include <exception>
@@ -78,18 +77,24 @@
 #include <boost/unordered_map.hpp>
 #include <boost/container/flat_set.hpp>
 #include <boost/container/flat_map.hpp>
+#include <boost/dynamic_bitset.hpp>
 #include <boost/scoped_ptr.hpp>
+#include <boost/shared_ptr.hpp>
 #include <boost/typeof/typeof.hpp>
 #include <boost/foreach.hpp>
 #define boost_foreach BOOST_FOREACH
-#define boost_reverse_foreach BOOST_REVERSE_FOREACH
 #define stdext boost
 #define hash_map unordered_map
-#define hash_set unordered_set
-#define hash_multimap unordered_multimap
-#define hash_multiset unordered_multiset
 
-#ifdef _MSC_VER
+#define foreach(iter, container) \
+	if (!(container).empty())    \
+		for (BOOST_AUTO(iter, (container).begin()), iter##_end = (container).end(); iter != iter##_end; ++iter)
+
+#define reverse_foreach(iter, container) \
+	if (!(container).empty())            \
+		for (BOOST_AUTO(iter, (container).rbegin()), iter##_end = (container).rend(); iter != iter##_end; ++iter)
+
+#ifdef _WIN32
 	#include <winsock.h> // for hton() and family.
 #else
 	#include <unistd.h>
@@ -112,15 +117,12 @@
 #include <unicode/ubrk.h>
 
 namespace CG3 {
-	typedef std::basic_string<UChar> UString;
-	typedef std::vector<UString> UStringVector;
-	typedef std::vector<uint32_t> uint32Vector;
-	typedef std::map<uint32_t,int32_t> uint32int32Map;
-	typedef std::map<uint32_t,uint32_t> uint32Map;
-	namespace bc = ::boost::container;
+typedef std::basic_string<UChar> UString;
+typedef std::vector<UString> UStringVector;
+typedef std::vector<uint32_t> uint32Vector;
+namespace bc = ::boost::container;
 }
 
-#include "macros.hpp"
 #include "inlines.hpp"
 #include "uextras.hpp"
 #include "flat_unordered_map.hpp"

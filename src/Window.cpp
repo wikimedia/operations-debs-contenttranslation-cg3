@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2014, GrammarSoft ApS
+* Copyright (C) 2007-2016, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -26,38 +26,38 @@
 
 namespace CG3 {
 
-Window::Window(GrammarApplicator *p) :
-parent(p),
-cohort_counter(1),
-window_counter(0),
-window_span(0),
-current(0)
+Window::Window(GrammarApplicator *p)
+  : parent(p)
+  , cohort_counter(1)
+  , window_counter(0)
+  , window_span(0)
+  , current(0)
 {
 }
 
 Window::~Window() {
 	SingleWindowCont::iterator iter;
-	for (iter = previous.begin() ; iter != previous.end() ; iter++) {
+	for (iter = previous.begin(); iter != previous.end(); iter++) {
 		delete *iter;
 	}
 
 	delete current;
 	current = 0;
 
-	for (iter = next.begin() ; iter != next.end() ; iter++) {
+	for (iter = next.begin(); iter != next.end(); iter++) {
 		delete *iter;
 	}
 }
 
 SingleWindow *Window::allocSingleWindow() {
-	SingleWindow *swindow = new SingleWindow(this);
+	SingleWindow *swindow = alloc_swindow(this);
 	window_counter++;
 	swindow->number = window_counter;
 	return swindow;
 }
 
 SingleWindow *Window::allocPushSingleWindow() {
-	SingleWindow *swindow = new SingleWindow(this);
+	SingleWindow *swindow = alloc_swindow(this);
 	window_counter++;
 	swindow->number = window_counter;
 	if (!next.empty()) {
@@ -68,12 +68,12 @@ SingleWindow *Window::allocPushSingleWindow() {
 		swindow->previous = current;
 		current->next = swindow;
 	}
-	next.push_front(swindow);
+	next.insert(next.begin(), swindow);
 	return swindow;
 }
 
 SingleWindow *Window::allocAppendSingleWindow() {
-	SingleWindow *swindow = new SingleWindow(this);
+	SingleWindow *swindow = alloc_swindow(this);
 	window_counter++;
 	swindow->number = window_counter;
 	if (!next.empty()) {
@@ -94,14 +94,14 @@ void Window::shuffleWindowsDown() {
 
 	if (!next.empty()) {
 		current = next.front();
-		next.pop_front();
+		next.erase(next.begin());
 	}
 }
 
 void Window::rebuildSingleWindowLinks() {
 	SingleWindow *sWindow = 0;
 
-	foreach (SingleWindowCont, previous, iter, iter_end) {
+	foreach (iter, previous) {
 		(*iter)->previous = sWindow;
 		if (sWindow) {
 			sWindow->next = *iter;
@@ -117,7 +117,7 @@ void Window::rebuildSingleWindowLinks() {
 		sWindow = current;
 	}
 
-	foreach (SingleWindowCont, next, iter, iter_end) {
+	foreach (iter, next) {
 		(*iter)->previous = sWindow;
 		if (sWindow) {
 			sWindow->next = *iter;
@@ -144,7 +144,7 @@ void Window::rebuildCohortLinks() {
 
 	Cohort *prev = 0;
 	while (sWindow) {
-		foreach (CohortVector, sWindow->cohorts, citer, citer_end) {
+		foreach (citer, sWindow->cohorts) {
 			(*citer)->prev = prev;
 			(*citer)->next = 0;
 			if (prev) {
@@ -155,5 +155,4 @@ void Window::rebuildCohortLinks() {
 		sWindow = sWindow->next;
 	}
 }
-
 }

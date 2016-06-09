@@ -1,5 +1,8 @@
 # Threading, for exec-stream
-find_package(Threads REQUIRED)
+# There's some weird bug/interaction with recent Apple toolchains and this, so disable for now.
+if(NOT APPLE)
+	find_package(Threads REQUIRED)
+endif()
 
 # Boost
 find_path(Boost_LOCAL NAMES boost/config.hpp PATHS "${CMAKE_CURRENT_SOURCE_DIR}/../include" NO_DEFAULT_PATH)
@@ -26,7 +29,7 @@ if(ICU_FOUND)
 	message(STATUS "Found ICU version ${ICU_VERSION}")
 endif()
 
-if(NOT CMAKE_BUILD_TYPE STREQUAL Debug AND OPT_TCMALLOC)
+if(NOT CMAKE_BUILD_TYPE STREQUAL Debug AND USE_TCMALLOC)
 	find_library(GOOGLE_TCMALLOC_LIB tcmalloc)
 	if(GOOGLE_TCMALLOC_LIB)
 		message(STATUS "Found tcmalloc: ${GOOGLE_TCMALLOC_LIB}")
@@ -41,7 +44,7 @@ macro(cg3_link target)
 		target_link_libraries(${target} ${GOOGLE_TCMALLOC_LIB})
 	endif()
 
-	if(MSVC)
+	if(WIN32)
 		target_link_libraries(${target} "wsock32.lib")
 	endif()
 
@@ -51,6 +54,7 @@ macro(cg3_link target)
 endmacro()
 
 set(LIBCG3_HEADERS
+	AST.hpp
 	BinaryGrammar.hpp
 	Cohort.hpp
 	CohortIterator.hpp
@@ -58,6 +62,8 @@ set(LIBCG3_HEADERS
 	Grammar.hpp
 	GrammarApplicator.hpp
 	GrammarWriter.hpp
+	Relabeller.hpp
+	MweSplitApplicator.hpp
 	IGrammarParser.hpp
 	Reading.hpp
 	Rule.hpp
@@ -75,16 +81,18 @@ set(LIBCG3_HEADERS
 	inlines.hpp
 	interval_vector.hpp
 	istream.hpp
-	macros.hpp
+	parser_helpers.hpp
+	process.hpp
+	scoped_stack.hpp
 	sorted_vector.hpp
 	stdafx.hpp
 	uextras.hpp
 	version.hpp
-	../include/exec-stream/exec-stream.h
 	)
 set(LIBCG3_SOURCES
 	BinaryGrammar.cpp
 	BinaryGrammar_read.cpp
+	BinaryGrammar_read_10043.cpp
 	BinaryGrammar_write.cpp
 	Cohort.cpp
 	CohortIterator.cpp
@@ -97,6 +105,8 @@ set(LIBCG3_SOURCES
 	GrammarApplicator_runGrammar.cpp
 	GrammarApplicator_runRules.cpp
 	GrammarWriter.cpp
+	Relabeller.cpp
+	MweSplitApplicator.cpp
 	Reading.cpp
 	Rule.cpp
 	Set.cpp
@@ -106,15 +116,13 @@ set(LIBCG3_SOURCES
 	TextualParser.cpp
 	Window.cpp
 	uextras.cpp
-	../include/exec-stream/exec-stream.cpp
+	${POPEN_PLUS_C}
 	${LIBCG3_HEADERS}
 	)
 if(MSVC)
 	set(LIBCG3_SOURCES
-		../win32/getopt.c
-		../win32/getopt.h
-		../win32/libgen.c
-		../win32/libgen.h
+		"${CMAKE_SOURCE_DIR}/include/win32/getopt.c"
+		"${CMAKE_SOURCE_DIR}/include/win32/getopt.h"
 		${LIBCG3_SOURCES}
 		)
 endif()
@@ -147,14 +155,22 @@ add_executable(cg-proc
 	cg_proc.cpp
 	ApertiumApplicator.cpp
 	ApertiumApplicator.hpp
+	MatxinApplicator.cpp
+	MatxinApplicator.hpp
 	)
 cg3_link(cg-proc)
 target_link_libraries(cg-proc ${LINKLIB})
+
+add_executable(cg-relabel cg-relabel.cpp)
+cg3_link(cg-relabel)
+target_link_libraries(cg-relabel ${LINKLIB})
 
 add_executable(cg-conv
 	cg_conv.cpp
 	ApertiumApplicator.cpp
 	ApertiumApplicator.hpp
+	MatxinApplicator.cpp
+	MatxinApplicator.hpp
 	FormatConverter.cpp
 	FormatConverter.hpp
 	FSTApplicator.cpp
@@ -168,6 +184,10 @@ add_executable(cg-conv
 cg3_link(cg-conv)
 target_link_libraries(cg-conv ${LINKLIB})
 
+add_executable(cg-mwesplit cg-mwesplit.cpp MweSplitApplicator.cpp MweSplitApplicator.hpp)
+cg3_link(cg-mwesplit)
+target_link_libraries(cg-mwesplit ${LINKLIB})
+
 add_executable(vislcg3 main.cpp options.hpp)
 cg3_link(vislcg3)
 target_link_libraries(vislcg3 ${LINKLIB})
@@ -176,11 +196,12 @@ add_executable(test_libcg3 test_libcg3.c)
 target_link_libraries(test_libcg3 ${LINKLIB})
 
 if(APPLE)
-	foreach(t cg-conv cg-comp cg-proc vislcg3)
-		get_property("_file_${t}" TARGET ${t} PROPERTY LOCATION)
+	foreach(t cg-conv cg-comp cg-proc cg-relabel cg-mwesplit vislcg3)
+		set("_file_${t}" $<TARGET_FILE:${t}>)
 		add_custom_command(
 			TARGET ${t}
 			POST_BUILD
+			COMMAND install_name_tool -change libcg3.0.dylib @rpath/libcg3.0.dylib ${_file_${t}}
 			COMMAND install_name_tool -add_rpath @executable_path/ ${_file_${t}}
 			COMMAND install_name_tool -add_rpath @executable_path/../${CG_LIBDIR} ${_file_${t}}
 			COMMAND install_name_tool -add_rpath @loader_path/../${CG_LIBDIR} ${_file_${t}}
@@ -190,11 +211,14 @@ if(APPLE)
 	endforeach()
 endif()
 
-add_test(t_libcg3 test_libcg3 "${CMAKE_CURRENT_SOURCE_DIR}/../test/T_BasicSelect/grammar.cg3")
+add_test(t_libcg3 test_libcg3 "${CMAKE_CURRENT_SOURCE_DIR}/../test/T_Select/grammar.cg3")
 
-install(TARGETS libcg3 ARCHIVE DESTINATION "${CG_LIBDIR}/${CMAKE_LIBRARY_ARCHITECTURE}")
+if(INSTALL_STATIC)
+	install(TARGETS libcg3 ARCHIVE DESTINATION "${CG_LIBDIR}/${CMAKE_LIBRARY_ARCHITECTURE}")
+endif()
+
 if(NOT MSVC)
-	install(TARGETS libcg3-shared ARCHIVE DESTINATION "${CG_LIBDIR}/${CMAKE_LIBRARY_ARCHITECTURE}" LIBRARY DESTINATION "${CG_LIBDIR}/${CMAKE_LIBRARY_ARCHITECTURE}")
+	install(TARGETS libcg3-shared ARCHIVE DESTINATION "${CG_LIBDIR}/${CMAKE_LIBRARY_ARCHITECTURE}" LIBRARY DESTINATION "${CG_LIBDIR}/${CMAKE_LIBRARY_ARCHITECTURE}" RUNTIME DESTINATION bin)
 	install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/cg3.h" DESTINATION include)
 endif()
-install(TARGETS cg-comp cg-proc cg-conv vislcg3 RUNTIME DESTINATION bin)
+install(TARGETS cg-comp cg-proc cg-relabel cg-mwesplit cg-conv vislcg3 RUNTIME DESTINATION bin)

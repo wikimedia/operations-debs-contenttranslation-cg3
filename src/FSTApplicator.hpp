@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2014, GrammarSoft ApS
+* Copyright (C) 2007-2016, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -31,8 +31,11 @@ class FSTApplicator : public virtual GrammarApplicator {
 public:
 	FSTApplicator(UFILE *ux_err);
 	void runGrammarOnText(istream& input, UFILE *output);
-};
 
+	double wfactor;
+	UString wtag;
+	UString sub_delims;
+};
 }
 
 #endif

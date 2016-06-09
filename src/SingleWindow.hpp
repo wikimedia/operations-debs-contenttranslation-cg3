@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2014, GrammarSoft ApS
+* Copyright (C) 2007-2016, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -30,29 +30,46 @@
 #include "sorted_vector.hpp"
 
 namespace CG3 {
-	class Window;
+class Window;
 
-	class SingleWindow {
-	public:
-		uint32_t number;
-		bool has_enclosures;
-		SingleWindow *next, *previous;
-		Window *parent;
-		UString text;
-		CohortVector cohorts;
-		uint32IntervalVector valid_rules;
-		uint32SortedVector hit_external;
-		uint32ToCohortsMap rule_to_cohorts;
-		uint32FlatHashMap variables_set;
-		uint32FlatHashSet variables_rem;
-		uint32SortedVector variables_output;
+class SingleWindow {
+public:
+	uint32_t number;
+	bool has_enclosures;
+	SingleWindow *next, *previous;
+	Window *parent;
+	UString text;
+	CohortVector cohorts;
+	uint32IntervalVector valid_rules;
+	uint32SortedVector hit_external;
+	std::vector<CohortSet> rule_to_cohorts;
+	uint32FlatHashMap variables_set;
+	uint32FlatHashSet variables_rem;
+	uint32SortedVector variables_output;
+	Reading bag_of_tags;
 
-		SingleWindow(Window *p);
-		~SingleWindow();
+	SingleWindow(Window *p);
+	~SingleWindow();
+	void clear();
 
-		void appendCohort(Cohort *cohort);
-	};
+	void appendCohort(Cohort *cohort);
+};
 
+SingleWindow *alloc_swindow(Window *p);
+void free_swindow(SingleWindow *s);
+
+inline bool less_Cohort(const Cohort *a, const Cohort *b) {
+	if (a->local_number == b->local_number) {
+		return a->parent->number < b->parent->number;
+	}
+	return a->local_number < b->local_number;
+}
+
+struct compare_Cohort {
+	bool operator()(const Cohort *a, const Cohort *b) const {
+		return less_Cohort(a, b);
+	}
+};
 }
 
 #endif

@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2014, GrammarSoft ApS
+* Copyright (C) 2007-2016, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -23,7 +23,7 @@
 
 namespace CG3 {
 
-UnicodeString flags[FLAGS_COUNT] = {
+UnicodeString g_flags[FLAGS_COUNT] = {
 	UNICODE_STRING_SIMPLE("NEAREST"),
 	UNICODE_STRING_SIMPLE("ALLOWLOOP"),
 	UNICODE_STRING_SIMPLE("DELAYED"),
@@ -48,11 +48,12 @@ UnicodeString flags[FLAGS_COUNT] = {
 	UNICODE_STRING_SIMPLE("UNMAPLAST"),
 	UNICODE_STRING_SIMPLE("REVERSE"),
 	UNICODE_STRING_SIMPLE("SUB"),
-	UNICODE_STRING_SIMPLE("OUTPUT")
+	UNICODE_STRING_SIMPLE("OUTPUT"),
+	UNICODE_STRING_SIMPLE("CAPTURE_UNIF"),
 };
 
 UnicodeString keywords[KEYWORD_COUNT] = {
-	UNICODE_STRING_SIMPLE("1f283fc29adb937a892e09bbc124b85c this is a dummy keyword to hold position 0"),
+	UNICODE_STRING_SIMPLE("__CG3_DUMMY_KEYWORD__"),
 	UNICODE_STRING_SIMPLE("SETS"),
 	UNICODE_STRING_SIMPLE("LIST"),
 	UNICODE_STRING_SIMPLE("SET"),
@@ -107,14 +108,18 @@ UnicodeString keywords[KEYWORD_COUNT] = {
 	UNICODE_STRING_SIMPLE("EXTERNAL"),
 	UNICODE_STRING_SIMPLE("EXTERNAL-ONCE"),
 	UNICODE_STRING_SIMPLE("EXTERNAL-ALWAYS"),
-	UNICODE_STRING_SIMPLE("SUBREADINGS")
+	UNICODE_STRING_SIMPLE("OPTIONS"),
+	UNICODE_STRING_SIMPLE("STRICT-TAGS"),
+	UNICODE_STRING_SIMPLE("REOPEN-MAPPINGS"),
+	UNICODE_STRING_SIMPLE("SUBREADINGS"),
+	UNICODE_STRING_SIMPLE("SPLITCOHORT"),
 };
 
-const UChar _S_SET_ISECT_U[] = {L'\u2229', 0};
-const UChar _S_SET_SYMDIFF_U[] = {L'\u2206', 0};
+const UChar _S_SET_ISECT_U[] = { L'\u2229', 0 };
+const UChar _S_SET_SYMDIFF_U[] = { L'\u2206', 0 };
 
 UnicodeString stringbits[STRINGS_COUNT] = {
-	UNICODE_STRING_SIMPLE("1f283fc29adb937a892e09bbc124b85c this is a dummy string to hold position 0"),
+	UNICODE_STRING_SIMPLE("__CG3_DUMMY_STRINGBIT__"),
 	UNICODE_STRING_SIMPLE("|"),
 	UNICODE_STRING_SIMPLE("TO"),
 	UNICODE_STRING_SIMPLE("OR"),
@@ -182,11 +187,16 @@ UnicodeString stringbits[STRINGS_COUNT] = {
 	UNICODE_STRING_SIMPLE("FROM"),
 	UNICODE_STRING_SIMPLE("EXCEPT"),
 	UNICODE_STRING_SIMPLE("_ENCL_"),
+	UNICODE_STRING_SIMPLE("_SAME_BASIC_"),
+	UNICODE_STRING_SIMPLE("no-inline-sets"),
+	UNICODE_STRING_SIMPLE("no-inline-templates"),
+	UNICODE_STRING_SIMPLE("strict-wordforms"),
+	UNICODE_STRING_SIMPLE("strict-baseforms"),
+	UNICODE_STRING_SIMPLE("strict-secondary"),
 	UNICODE_STRING_SIMPLE("<STREAMCMD:SETVAR:"),
-	UNICODE_STRING_SIMPLE("<STREAMCMD:REMVAR:")
+	UNICODE_STRING_SIMPLE("<STREAMCMD:REMVAR:"),
 };
 
-std::vector< std::vector<UChar> > gbuffers(NUM_GBUFFERS, std::vector<UChar>(CG3_BUFFER_SIZE, 0));
+std::vector<std::vector<UChar> > gbuffers(NUM_GBUFFERS, std::vector<UChar>(CG3_BUFFER_SIZE, 0));
 std::vector<std::string> cbuffers(NUM_CBUFFERS, std::string(CG3_BUFFER_SIZE, 0));
-
 }

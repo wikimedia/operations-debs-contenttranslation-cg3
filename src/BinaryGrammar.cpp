@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2014, GrammarSoft ApS
+* Copyright (C) 2007-2016, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -29,15 +29,17 @@ BinaryGrammar::BinaryGrammar(Grammar& res, UFILE *ux_err) {
 	ux_stderr = ux_err;
 	result = &res;
 	grammar = result;
+	verbosity = 0;
 }
 
 void BinaryGrammar::setCompatible(bool) {
 }
 
-void BinaryGrammar::setVerbosity(uint32_t) {
+void BinaryGrammar::setVerbosity(uint32_t v) {
+	verbosity = v;
 }
 
-int BinaryGrammar::parse_grammar_from_file(const char *filename, const char *, const char *) {
+int BinaryGrammar::parse_grammar_from_file(const char *filename, const char*, const char*) {
 	if (!grammar) {
 		u_fprintf(ux_stderr, "Error: Cannot parse into nothing - hint: call setResult() before trying.\n");
 		CG3Quit(1);
@@ -61,5 +63,4 @@ int BinaryGrammar::parse_grammar_from_file(const char *filename, const char *, c
 	}
 	return readBinaryGrammar(input);
 }
-
 }

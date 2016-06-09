@@ -1,5 +1,5 @@
 #include "stdafx.hpp"
-#include <exec-stream.cpp>
+#include <popen_plus.c>
 #include "BinaryGrammar.cpp"
 #include "ContextualTest.cpp"
 #include "Grammar.cpp"
@@ -9,6 +9,7 @@
 #include "Tag.cpp"
 #include "TextualParser.cpp"
 #include "uextras.cpp"
+#include "BinaryGrammar_read_10043.cpp"
 #include "BinaryGrammar_read.cpp"
 #include "BinaryGrammar_write.cpp"
 #include "cg_comp.cpp"

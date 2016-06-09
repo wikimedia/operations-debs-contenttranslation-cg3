@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2014, GrammarSoft ApS
+* Copyright (C) 2007-2016, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -23,14 +23,15 @@
 
 namespace CG3 {
 
-FormatConverter::FormatConverter(UFILE *ux_err) :
-GrammarApplicator(ux_err),
-ApertiumApplicator(ux_err),
-NicelineApplicator(ux_err),
-PlaintextApplicator(ux_err),
-FSTApplicator(ux_err),
-informat(FMT_CG),
-outformat(FMT_CG)
+FormatConverter::FormatConverter(UFILE *ux_err)
+  : GrammarApplicator(ux_err)
+  , ApertiumApplicator(ux_err)
+  , NicelineApplicator(ux_err)
+  , PlaintextApplicator(ux_err)
+  , FSTApplicator(ux_err)
+  , MatxinApplicator(ux_err)
+  , informat(FMT_CG)
+  , outformat(FMT_CG)
 {
 }
 
@@ -44,52 +45,51 @@ void FormatConverter::setOutputFormat(CG_FORMATS format) {
 
 void FormatConverter::runGrammarOnText(istream& input, UFILE *output) {
 	switch (informat) {
-		case FMT_CG: {
-			GrammarApplicator::runGrammarOnText(input, output);
-			break;
-		}
-		case FMT_APERTIUM: {
-			ApertiumApplicator::runGrammarOnText(input, output);
-			break;
-		}
-		case FMT_NICELINE: {
-			NicelineApplicator::runGrammarOnText(input, output);
-			break;
-		}
-		case FMT_PLAIN: {
-			PlaintextApplicator::runGrammarOnText(input, output);
-			break;
-		}
-		case FMT_FST: {
-			FSTApplicator::runGrammarOnText(input, output);
-			break;
-		}
-		default:
-			CG3Quit();
+	case FMT_CG: {
+		GrammarApplicator::runGrammarOnText(input, output);
+		break;
+	}
+	case FMT_APERTIUM: {
+		ApertiumApplicator::runGrammarOnText(input, output);
+		break;
+	}
+	case FMT_NICELINE: {
+		NicelineApplicator::runGrammarOnText(input, output);
+		break;
+	}
+	case FMT_PLAIN: {
+		PlaintextApplicator::runGrammarOnText(input, output);
+		break;
+	}
+	case FMT_FST: {
+		FSTApplicator::runGrammarOnText(input, output);
+		break;
+	}
+	default:
+		CG3Quit();
 	}
 }
 
 void FormatConverter::printSingleWindow(SingleWindow *window, UFILE *output) {
 	switch (outformat) {
-		case FMT_CG: {
-			GrammarApplicator::printSingleWindow(window, output);
-			break;
-		}
-		case FMT_APERTIUM: {
-			ApertiumApplicator::printSingleWindow(window, output);
-			break;
-		}
-		case FMT_NICELINE: {
-			NicelineApplicator::printSingleWindow(window, output);
-			break;
-		}
-		case FMT_PLAIN: {
-			PlaintextApplicator::printSingleWindow(window, output);
-			break;
-		}
-		default:
-			CG3Quit();
+	case FMT_CG: {
+		GrammarApplicator::printSingleWindow(window, output);
+		break;
+	}
+	case FMT_APERTIUM: {
+		ApertiumApplicator::printSingleWindow(window, output);
+		break;
+	}
+	case FMT_NICELINE: {
+		NicelineApplicator::printSingleWindow(window, output);
+		break;
+	}
+	case FMT_PLAIN: {
+		PlaintextApplicator::printSingleWindow(window, output);
+		break;
+	}
+	default:
+		CG3Quit();
 	}
 }
-
 }
