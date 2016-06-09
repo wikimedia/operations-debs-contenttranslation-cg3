@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2014, GrammarSoft ApS
+* Copyright (C) 2007-2016, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -78,7 +78,7 @@ uint32_t GrammarApplicator::doesTagMatchRegexp(uint32_t test, const Tag& tag, bo
 		UErrorCode status = U_ZERO_ERROR;
 		uregex_setText(tag.regexp, itag.tag.c_str(), itag.tag.length(), &status);
 		if (status != U_ZERO_ERROR) {
-			u_fprintf(ux_stderr, "Error: uregex_setText(MatchSet) returned %s - cannot continue!\n", u_errorName(status));
+			u_fprintf(ux_stderr, "Error: uregex_setText(MatchSet) returned %s for tag %S before input line %u - cannot continue!\n", u_errorName(status), tag.tag.c_str(), numLines);
 			CG3Quit(1);
 		}
 		status = U_ZERO_ERROR;
@@ -86,7 +86,7 @@ uint32_t GrammarApplicator::doesTagMatchRegexp(uint32_t test, const Tag& tag, bo
 			match = itag.hash;
 		}
 		if (status != U_ZERO_ERROR) {
-			u_fprintf(ux_stderr, "Error: uregex_find(MatchSet) returned %s - cannot continue!\n", u_errorName(status));
+			u_fprintf(ux_stderr, "Error: uregex_find(MatchSet) returned %s for tag %S before input line %u - cannot continue!\n", u_errorName(status), tag.tag.c_str(), numLines);
 			CG3Quit(1);
 		}
 		if (match) {
@@ -95,8 +95,12 @@ uint32_t GrammarApplicator::doesTagMatchRegexp(uint32_t test, const Tag& tag, bo
 				UChar tmp[1024];
 				for (int i = 1; i <= gc; ++i) {
 					tmp[0] = 0;
-					uregex_group(tag.regexp, i, tmp, 1024, &status);
-					regexgrps.push_back(tmp);
+					int32_t len = uregex_group(tag.regexp, i, tmp, 1024, &status);
+					regexgrps.second->resize(std::max(static_cast<size_t>(regexgrps.first) + 1, regexgrps.second->size()));
+					UnicodeString& ucstr = (*regexgrps.second)[regexgrps.first];
+					ucstr.remove();
+					ucstr.append(tmp, len);
+					++regexgrps.first;
 				}
 			}
 			else {
@@ -149,7 +153,7 @@ uint32_t GrammarApplicator::doesRegexpMatchReading(const Reading& reading, const
 	uint32_t match = 0;
 
 	// Grammar::reindex() will do a one-time pass to mark any potential matching tag as T_TEXTUAL
-	const_foreach (uint32SortedVector, reading.tags_textual, mter, mter_end) {
+	foreach (mter, reading.tags_textual) {
 		match = doesTagMatchRegexp(*mter, tag, bypass_index);
 		if (match) {
 			break;
@@ -190,8 +194,8 @@ uint32_t GrammarApplicator::doesTagMatchReading(const Reading& reading, const Ta
 	}
 	else if (tag.type & T_SET) {
 		uint32_t sh = hash_value(tag.tag);
-		Set *s = grammar->getSet(sh);
-		match = doesSetMatchReading(reading, s->hash, bypass_index, unif_mode);
+		sh = grammar->sets_by_name.find(sh)->second;
+		match = doesSetMatchReading(reading, sh, bypass_index, unif_mode);
 	}
 	else if (tag.type & T_VARSTRING) {
 		const Tag *nt = generateVarstringTag(&tag);
@@ -201,7 +205,7 @@ uint32_t GrammarApplicator::doesTagMatchReading(const Reading& reading, const Ta
 		match = doesRegexpMatchReading(reading, tag, bypass_index);
 	}
 	else if (tag.type & T_CASE_INSENSITIVE) {
-		const_foreach (uint32SortedVector, reading.tags_textual, mter, mter_end) {
+		foreach (mter, reading.tags_textual) {
 			match = doesTagMatchIcase(*mter, tag, bypass_index);
 			if (match) {
 				break;
@@ -236,9 +240,9 @@ uint32_t GrammarApplicator::doesTagMatchReading(const Reading& reading, const Ta
 			}
 		}
 		else {
-			const_foreach (uint32SortedVector, reading.tags_textual, mter, mter_end) {
+			foreach (mter, reading.tags_textual) {
 				const Tag& itag = *(single_tags.find(*mter)->second);
-				if (!(itag.type & (T_BASEFORM|T_WORDFORM))) {
+				if (!(itag.type & (T_BASEFORM | T_WORDFORM))) {
 					match = itag.hash;
 					if (unif_mode) {
 						if (unif_last_textual) {
@@ -422,6 +426,11 @@ uint32_t GrammarApplicator::doesTagMatchReading(const Reading& reading, const Ta
 			match = grammar->tag_any;
 		}
 	}
+	else if (tag.type & T_SAME_BASIC) {
+		if (reading.hash_plain == same_basic) {
+			match = grammar->tag_any;
+		}
+	}
 
 	if (match) {
 		++match_single;
@@ -438,14 +447,14 @@ bool GrammarApplicator::doesSetMatchReading_trie(const Reading& reading, const S
 			if (kv.first->type & T_FAILFAST) {
 				continue;
 			}
-			if (unif_mode) {
-				BOOST_AUTO(it, unif_tags->find(theset.hash));
-				if (it != unif_tags->end() && it->second != kv.first->hash) {
-					continue;
-				}
-				(*unif_tags)[theset.hash] = kv.first->hash;
-			}
 			if (kv.second.terminal) {
+				if (unif_mode) {
+					BOOST_AUTO(it, unif_tags->find(theset.number));
+					if (it != unif_tags->end() && it->second != &kv) {
+						continue;
+					}
+					(*unif_tags)[theset.number] = &kv;
+				}
 				return true;
 			}
 			if (kv.second.trie && doesSetMatchReading_trie(reading, theset, *kv.second.trie, unif_mode)) {
@@ -483,15 +492,15 @@ bool GrammarApplicator::doesSetMatchReading_tags(const Reading& reading, const S
 		uint32SortedVector::const_iterator oiter = reading.tags_plain.lower_bound(theset.trie.begin()->first->hash);
 		while (oiter != reading.tags_plain.end() && iiter != theset.trie.end()) {
 			if (*oiter == iiter->first->hash) {
-				if (unif_mode) {
-					BOOST_AUTO(it, unif_tags->find(theset.hash));
-					if (it != unif_tags->end() && it->second != *oiter) {
-						++iiter;
-						continue;
-					}
-					(*unif_tags)[theset.hash] = *oiter;
-				}
 				if (iiter->second.terminal) {
+					if (unif_mode) {
+						BOOST_AUTO(it, unif_tags->find(theset.number));
+						if (it != unif_tags->end() && it->second != &*iiter) {
+							++iiter;
+							continue;
+						}
+						(*unif_tags)[theset.number] = &*iiter;
+					}
 					retval = true;
 					break;
 				}
@@ -533,12 +542,11 @@ bool GrammarApplicator::doesSetMatchReading(const Reading& reading, const uint32
 	// These indexes are cleared every ((num_windows+4)*2+1) windows to avoid memory ballooning.
 	// Only 30% of tests get past this.
 	// ToDo: This is not good enough...while numeric tags are special, their failures can be indexed.
-	uint32_t ih = hash_value(reading.hash, set);
 	if (!bypass_index && !unif_mode) {
-		if (index_matches(index_readingSet_no, ih)) {
+		if (index_readingSet_no[set].find(reading.hash) != index_readingSet_no[set].end()) {
 			return false;
 		}
-		else if (index_matches(index_readingSet_yes, ih)) {
+		if (index_readingSet_yes[set].find(reading.hash) != index_readingSet_yes[set].end()) {
 			return true;
 		}
 	}
@@ -551,8 +559,7 @@ bool GrammarApplicator::doesSetMatchReading(const Reading& reading, const uint32
 	}
 
 	// ToDo: Make all places have Set* directly so we don't need to perform this lookup.
-	Setuint32HashMap::const_iterator iter = grammar->sets_by_contents.find(set);
-	const Set& theset = *(iter->second);
+	const Set& theset = *grammar->sets_list[set];
 
 	// The (*) set always matches.
 	if (theset.type & ST_ANY) {
@@ -560,21 +567,19 @@ bool GrammarApplicator::doesSetMatchReading(const Reading& reading, const uint32
 	}
 	// If there are no sub-sets, it must be a LIST set.
 	else if (theset.sets.empty()) {
-		retval = doesSetMatchReading_tags(reading, theset, ((theset.type & ST_TAG_UNIFY)!=0)|unif_mode);
+		retval = doesSetMatchReading_tags(reading, theset, ((theset.type & ST_TAG_UNIFY) != 0) | unif_mode);
 	}
 	// &&unified sets
 	else if (theset.type & ST_SET_UNIFY) {
 		// ToDo: Handle multiple active &&sets at a time.
 		// First time, figure out all the sub-sets that match the reading and store them for later comparison
 		if (unif_sets_firstrun) {
-			Setuint32HashMap::const_iterator iter = grammar->sets_by_contents.find(theset.sets[0]);
-			const Set& uset = *(iter->second);
+			const Set& uset = *grammar->sets_list[theset.sets[0]];
 			const size_t size = uset.sets.size();
-			for (size_t i=0;i<size;++i) {
-				iter = grammar->sets_by_contents.find(uset.sets[i]);
-				const Set& tset = *(iter->second);
-				if (doesSetMatchReading(reading, tset.hash, bypass_index, ((theset.type & ST_TAG_UNIFY)!=0)|unif_mode)) {
-					unif_sets->insert(tset.hash);
+			for (size_t i = 0; i < size; ++i) {
+				const Set& tset = *grammar->sets_list[uset.sets[i]];
+				if (doesSetMatchReading(reading, tset.number, bypass_index, ((theset.type & ST_TAG_UNIFY) != 0) | unif_mode)) {
+					unif_sets->insert(tset.number);
 				}
 			}
 			retval = !unif_sets->empty();
@@ -582,54 +587,54 @@ bool GrammarApplicator::doesSetMatchReading(const Reading& reading, const uint32
 		}
 		// Subsequent times, test whether any of the previously stored sets match the reading
 		else {
-			uint32SortedVector sets;
-			foreach(uint32SortedVector, *unif_sets, usi, usi_end) {
+			BOOST_AUTO(sets, ss_u32sv.get());
+			foreach (usi, *unif_sets) {
 				if (doesSetMatchReading(reading, *usi, bypass_index, unif_mode)) {
-					sets.insert(*usi);
+					sets->insert(*usi);
 				}
 			}
-			retval = !sets.empty();
+			retval = !sets->empty();
 		}
 	}
 	else {
 		// If all else fails, it must be a SET set.
 		// Loop through the sub-sets and apply the set operators
 		const size_t size = theset.sets.size();
-		for (size_t i=0;i<size;++i) {
-			bool match = doesSetMatchReading(reading, theset.sets[i], bypass_index, ((theset.type & ST_TAG_UNIFY)!=0)|unif_mode);
+		for (size_t i = 0; i < size; ++i) {
+			bool match = doesSetMatchReading(reading, theset.sets[i], bypass_index, ((theset.type & ST_TAG_UNIFY) != 0) | unif_mode);
 			bool failfast = false;
 			// Operator OR does not modify match, so simply skip it.
 			// The result of doing so means that the other operators gain precedence.
-			while (i < size-1 && theset.set_ops[i] != S_OR) {
+			while (i < size - 1 && theset.set_ops[i] != S_OR) {
 				switch (theset.set_ops[i]) {
-					case S_PLUS:
-						if (match) {
-							match = doesSetMatchReading(reading, theset.sets[i+1], bypass_index, ((theset.type & ST_TAG_UNIFY)!=0)|unif_mode);
-						}
-						break;
-					// Failfast makes a difference in A OR B ^ C OR D, where - does not.
-					case S_FAILFAST:
-						if (doesSetMatchReading(reading, theset.sets[i+1], bypass_index, ((theset.type & ST_TAG_UNIFY)!=0)|unif_mode)) {
+				case S_PLUS:
+					if (match) {
+						match = doesSetMatchReading(reading, theset.sets[i + 1], bypass_index, ((theset.type & ST_TAG_UNIFY) != 0) | unif_mode);
+					}
+					break;
+				// Failfast makes a difference in A OR B ^ C OR D, where - does not.
+				case S_FAILFAST:
+					if (doesSetMatchReading(reading, theset.sets[i + 1], bypass_index, ((theset.type & ST_TAG_UNIFY) != 0) | unif_mode)) {
+						match = false;
+						failfast = true;
+					}
+					break;
+				case S_MINUS:
+					if (match) {
+						if (doesSetMatchReading(reading, theset.sets[i + 1], bypass_index, ((theset.type & ST_TAG_UNIFY) != 0) | unif_mode)) {
 							match = false;
-							failfast = true;
 						}
-						break;
-					case S_MINUS:
-						if (match) {
-							if (doesSetMatchReading(reading, theset.sets[i+1], bypass_index, ((theset.type & ST_TAG_UNIFY)!=0)|unif_mode)) {
-								match = false;
-							}
+					}
+					break;
+				case S_NOT:
+					if (!match) {
+						if (!doesSetMatchReading(reading, theset.sets[i + 1], bypass_index, ((theset.type & ST_TAG_UNIFY) != 0) | unif_mode)) {
+							match = true;
 						}
-						break;
-					case S_NOT:
-						if (!match) {
-							if (!doesSetMatchReading(reading, theset.sets[i+1], bypass_index, ((theset.type & ST_TAG_UNIFY)!=0)|unif_mode)) {
-								match = true;
-							}
-						}
-						break;
-					default:
-						break;
+					}
+					break;
+				default:
+					break;
 				}
 				++i;
 			}
@@ -646,8 +651,8 @@ bool GrammarApplicator::doesSetMatchReading(const Reading& reading, const uint32
 		}
 		// Propagate unified tag to other sets of this set, if applicable
 		if (unif_mode || (theset.type & ST_TAG_UNIFY)) {
-			uint32_t tag = 0;
-			for (size_t i=0 ; i<size ; ++i) {
+			const void *tag = 0;
+			for (size_t i = 0; i < size; ++i) {
 				BOOST_AUTO(it, unif_tags->find(theset.sets[i]));
 				if (it != unif_tags->end()) {
 					tag = it->second;
@@ -655,7 +660,7 @@ bool GrammarApplicator::doesSetMatchReading(const Reading& reading, const uint32
 				}
 			}
 			if (tag) {
-				for (size_t i=0 ; i<size ; ++i) {
+				for (size_t i = 0; i < size; ++i) {
 					(*unif_tags)[theset.sets[i]] = tag;
 				}
 			}
@@ -674,34 +679,15 @@ bool GrammarApplicator::doesSetMatchReading(const Reading& reading, const uint32
 
 	// Store the result in the indexes in hopes that later runs can pull it directly from them.
 	if (retval) {
-		index_readingSet_yes.insert(ih);
+		index_readingSet_yes[set].insert(reading.hash);
 	}
 	else {
 		if (!(theset.type & ST_TAG_UNIFY) && !unif_mode) {
-			index_readingSet_no.insert(ih);
+			index_readingSet_no[set].insert(reading.hash);
 		}
 	}
 
 	return retval;
-}
-
-inline void GrammarApplicator::doesSetMatchCohortHelper(std::vector<Reading*>& rv, const ReadingList& readings, const Set *theset, const ContextualTest *test, uint32_t options) {
-	const_foreach (ReadingList, readings, iter, iter_end) {
-		Reading *reading = get_sub_reading(*iter, test->offset_sub);
-		if (!reading) {
-			continue;
-		}
-		if (doesSetMatchReading(*reading, theset->hash, (theset->type & (ST_CHILD_UNIFY|ST_SPECIAL)) != 0)) {
-			rv.push_back(reading);
-			if (!(options & MASK_POS_CDEPREL)) {
-				break;
-			}
-		}
-		else if (options & POS_CAREFUL) {
-			rv.clear();
-			break;
-		}
-	}
 }
 
 inline bool _check_options(std::vector<Reading*>& rv, uint32_t options, size_t nr) {
@@ -714,112 +700,182 @@ inline bool _check_options(std::vector<Reading*>& rv, uint32_t options, size_t n
 	return !rv.empty();
 }
 
-std::vector<Reading*> GrammarApplicator::doesSetMatchCohort(Cohort& cohort, const uint32_t set, const ContextualTest *test, uint32_t options) {
-	std::vector<Reading*> rv;
-	if (cohort.possible_sets.find(set) == cohort.possible_sets.end()) {
-		return rv;
-	}
+inline bool GrammarApplicator::doesSetMatchCohort_testLinked(Cohort& cohort, const Set& theset, dSMC_Context *context) {
+	bool retval = true;
+	const ContextualTest *linked = 0;
+	inc_dec<size_t> ic;
 
-	const Set *theset = grammar->sets_by_contents.find(set)->second;
-	doesSetMatchCohortHelper(rv, cohort.readings, theset, test, options);
-	if ((options & POS_LOOK_DELETED) && _check_options(rv, options, cohort.readings.size())) {
-		doesSetMatchCohortHelper(rv, cohort.deleted, theset, test, options);
+	if (context->test && context->test->linked) {
+		linked = context->test->linked;
 	}
-	if ((options & POS_LOOK_DELAYED)
-		&& (!(options & POS_LOOK_DELETED) || _check_options(rv, options, cohort.readings.size()+cohort.deleted.size()))) {
-		doesSetMatchCohortHelper(rv, cohort.delayed, theset, test, options);
+	else if (!tmpl_cntxs.empty() && tmpl_cntx_pos < tmpl_cntxs.size()) {
+		ic.inc(tmpl_cntx_pos);
+		linked = tmpl_cntxs[tmpl_cntxs.size() - tmpl_cntx_pos].test;
 	}
-	if (rv.empty()) {
-		if (!grammar->sets_any || grammar->sets_any->find(set) == grammar->sets_any->end()) {
-			cohort.possible_sets.erase(set);
-		}
-	}
-	return rv;
-}
-
-bool GrammarApplicator::doesSetMatchCohortNormal_helper(ReadingList& readings, const Set *theset, const ContextualTest *test) {
-	const_foreach (ReadingList, readings, iter, iter_end) {
-		Reading *reading = *iter;
-		if (test) {
-			// ToDo: Barriers need some way to escape sub-readings
-			reading = get_sub_reading(reading, test->offset_sub);
-			if (!reading) {
-				continue;
+	if (linked) {
+		if (!context->did_test) {
+			if (linked->pos & POS_NO_PASS_ORIGIN) {
+				context->matched_tests = (runContextualTest(cohort.parent, cohort.local_number, linked, context->deep, &cohort) != 0);
+			}
+			else {
+				context->matched_tests = (runContextualTest(cohort.parent, cohort.local_number, linked, context->deep, context->origin) != 0);
+			}
+			if (!(theset.type & ST_CHILD_UNIFY)) {
+				context->did_test = true;
 			}
 		}
-		if (doesSetMatchReading(*reading, theset->hash, (theset->type & (ST_CHILD_UNIFY|ST_SPECIAL)) != 0)) {
-			return true;
-		}
+		retval = context->matched_tests;
 	}
-	return false;
+	return retval;
 }
 
-bool GrammarApplicator::doesSetMatchCohortNormal(Cohort& cohort, const uint32_t set, const ContextualTest *test, uint64_t options) {
-	/*
-	return !doesSetMatchCohort(cohort, set, options).empty();
-	/*/
-	if (!(options & (POS_LOOK_DELETED|POS_LOOK_DELAYED)) && cohort.possible_sets.find(set) == cohort.possible_sets.end()) {
-		return false;
-	}
+inline bool GrammarApplicator::doesSetMatchCohort_helper(Cohort& cohort, Reading& reading, const Set& theset, dSMC_Context *context) {
 	bool retval = false;
-	const Set *theset = grammar->sets_by_contents.find(set)->second;
-	if (cohort.wread && doesSetMatchReading(*cohort.wread, theset->hash, (theset->type & (ST_CHILD_UNIFY|ST_SPECIAL)) != 0)) {
-		retval = true;
+	BOOST_AUTO(utags, ss_utags.get());
+	BOOST_AUTO(usets, ss_u32sv.get());
+	uint8_t orz = regexgrps.first;
+
+	if (context && !(current_rule->flags & FL_CAPTURE_UNIF) && (theset.type & ST_CHILD_UNIFY)) {
+		*utags = *unif_tags;
+		*usets = *unif_sets;
 	}
-	if (doesSetMatchCohortNormal_helper(cohort.readings, theset, test)) {
+	if (doesSetMatchReading(reading, theset.number, (theset.type & (ST_CHILD_UNIFY | ST_SPECIAL)) != 0)) {
 		retval = true;
+		if (context) {
+			if (context->options & POS_ATTACH_TO) {
+				reading.matched_target = true;
+			}
+			context->matched_target = true;
+		}
 	}
-	if (!retval && (options & POS_LOOK_DELETED) && doesSetMatchCohortNormal_helper(cohort.deleted, theset, test)) {
-		retval = true;
+	if (retval && context && (context->options & POS_NOT)) {
+		retval = !retval;
 	}
-	if (!retval && (options & POS_LOOK_DELAYED) && doesSetMatchCohortNormal_helper(cohort.delayed, theset, test)) {
-		retval = true;
+	if (retval && context && !context->in_barrier) {
+		retval = doesSetMatchCohort_testLinked(cohort, theset, context);
+		if (context->options & POS_ATTACH_TO) {
+			reading.matched_tests = retval;
+		}
+	}
+	if (!retval && context && !(current_rule->flags & FL_CAPTURE_UNIF) && (theset.type & ST_CHILD_UNIFY) && (utags->size() != unif_tags->size() || *utags != *unif_tags)) {
+		unif_tags->swap(utags);
+	}
+	if (!retval && context && !(current_rule->flags & FL_CAPTURE_UNIF) && (theset.type & ST_CHILD_UNIFY) && usets->size() != unif_sets->size()) {
+		unif_sets->swap(usets);
 	}
 	if (!retval) {
-		if (!grammar->sets_any || grammar->sets_any->find(set) == grammar->sets_any->end()) {
-			cohort.possible_sets.erase(set);
-		}
+		regexgrps.first = orz;
 	}
 	return retval;
-	//*/
 }
 
-bool GrammarApplicator::doesSetMatchCohortCareful_helper(ReadingList& readings, const Set *theset, const ContextualTest *test) {
-	const_foreach (ReadingList, readings, iter, iter_end) {
-		Reading *reading = *iter;
-		if (test) {
-			reading = get_sub_reading(reading, test->offset_sub);
-			if (!reading) {
-				return false;
+
+bool GrammarApplicator::doesSetMatchCohortNormal(Cohort& cohort, const uint32_t set, dSMC_Context *context) {
+	bool retval = false;
+
+	if (!(!context || (context->options & (POS_LOOK_DELETED | POS_LOOK_DELAYED | POS_NOT))) && (set >= cohort.possible_sets.size() || !cohort.possible_sets.test(set))) {
+		return retval;
+	}
+
+	const Set *theset = grammar->sets_list[set];
+
+	if (cohort.wread) {
+		retval = doesSetMatchCohort_helper(cohort, *cohort.wread, *theset, context);
+	}
+
+	if (retval && (!context || context->did_test)) {
+		return retval;
+	}
+
+	ReadingList *lists[3] = { &cohort.readings };
+	if (context && (context->options & POS_LOOK_DELETED)) {
+		lists[1] = &cohort.deleted;
+	}
+	if (context && (context->options & POS_LOOK_DELAYED)) {
+		lists[2] = &cohort.delayed;
+	}
+
+	for (size_t i = 0; i < 3; ++i) {
+		if (lists[i] == 0) {
+			continue;
+		}
+		foreach (iter, *lists[i]) {
+			Reading *reading = *iter;
+			if (context && context->test) {
+				// ToDo: Barriers need some way to escape sub-readings
+				reading = get_sub_reading(reading, context->test->offset_sub);
+				if (!reading) {
+					continue;
+				}
+			}
+			if (doesSetMatchCohort_helper(cohort, *reading, *theset, context)) {
+				retval = true;
+			}
+			if (retval && (!context || !(context->test && context->test->linked) || context->did_test)) {
+				return retval;
 			}
 		}
-		if (!doesSetMatchReading(*reading, theset->hash, (theset->type & (ST_CHILD_UNIFY|ST_SPECIAL)) != 0)) {
-			return false;
+	}
+
+	if (context && !context->matched_target && (context->options & POS_NOT)) {
+		retval = doesSetMatchCohort_testLinked(cohort, *theset, context);
+	}
+
+	if (context && !context->matched_target) {
+		if (!grammar->sets_any || set >= grammar->sets_any->size() || !grammar->sets_any->test(set)) {
+			if (set < cohort.possible_sets.size()) {
+				cohort.possible_sets.reset(set);
+			}
 		}
 	}
-	return !readings.empty();
-}
 
-bool GrammarApplicator::doesSetMatchCohortCareful(Cohort& cohort, const uint32_t set, const ContextualTest *test, uint64_t options) {
-	/*
-	return !doesSetMatchCohort(cohort, set, options).empty();
-	/*/
-	if (!(options & (POS_LOOK_DELETED|POS_LOOK_DELAYED)) && cohort.possible_sets.find(set) == cohort.possible_sets.end()) {
-		return false;
-	}
-	bool retval = true;
-	const Set *theset = grammar->sets_by_contents.find(set)->second;
-	if (!doesSetMatchCohortCareful_helper(cohort.readings, theset, test)) {
-		retval = false;
-	}
-	if (retval && (options & POS_LOOK_DELETED) && !doesSetMatchCohortCareful_helper(cohort.deleted, theset, test)) {
-		retval = false;
-	}
-	if (retval && (options & POS_LOOK_DELAYED) && !doesSetMatchCohortCareful_helper(cohort.delayed, theset, test)) {
-		retval = false;
-	}
 	return retval;
-	//*/
 }
 
+bool GrammarApplicator::doesSetMatchCohortCareful(Cohort& cohort, const uint32_t set, dSMC_Context *context) {
+	bool retval = false;
+
+	if (!(!context || (context->options & (POS_LOOK_DELETED | POS_LOOK_DELAYED | POS_NOT))) && (set >= cohort.possible_sets.size() || !cohort.possible_sets.test(set))) {
+		return retval;
+	}
+
+	const Set *theset = grammar->sets_list[set];
+
+	ReadingList *lists[3] = { &cohort.readings };
+	if (context && (context->options & POS_LOOK_DELETED)) {
+		lists[1] = &cohort.deleted;
+	}
+	if (context && (context->options & POS_LOOK_DELAYED)) {
+		lists[2] = &cohort.delayed;
+	}
+
+	for (size_t i = 0; i < 3; ++i) {
+		if (lists[i] == 0) {
+			continue;
+		}
+		foreach (iter, *lists[i]) {
+			Reading *reading = *iter;
+			if (context && context->test) {
+				// ToDo: Barriers need some way to escape sub-readings
+				reading = get_sub_reading(reading, context->test->offset_sub);
+				if (!reading) {
+					continue;
+				}
+			}
+			retval = doesSetMatchCohort_helper(cohort, *reading, *theset, context);
+			if (!retval) {
+				break;
+			}
+		}
+		if (!retval) {
+			break;
+		}
+	}
+
+	if (context && !context->matched_target && (context->options & POS_NOT)) {
+		retval = doesSetMatchCohort_testLinked(cohort, *theset, context);
+	}
+
+	return retval;
+}
 }

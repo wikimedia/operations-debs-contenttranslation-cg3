@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2014, GrammarSoft ApS
+* Copyright (C) 2007-2016, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -25,56 +25,52 @@
 
 namespace CG3 {
 
-Grammar::Grammar() :
-ux_stderr(0),
-ux_stdout(0),
-has_dep(false),
-has_relations(false),
-has_encl_final(false),
-is_binary(false),
-sub_readings_ltr(false),
-grammar_size(0),
-mapping_prefix('@'),
-lines(0),
-verbosity_level(0),
-total_time(0),
-rules_any(0),
-sets_any(0),
-delimiters(0),
-soft_delimiters(0),
-tag_any(0)
+Grammar::Grammar()
+  : ux_stderr(0)
+  , ux_stdout(0)
+  , has_dep(false)
+  , has_bag_of_tags(false)
+  , has_relations(false)
+  , has_encl_final(false)
+  , is_binary(false)
+  , sub_readings_ltr(false)
+  , grammar_size(0)
+  , mapping_prefix('@')
+  , lines(0)
+  , verbosity_level(0)
+  , total_time(0)
+  , rules_any(0)
+  , sets_any(0)
+  , delimiters(0)
+  , soft_delimiters(0)
+  , tag_any(0)
 {
 	// Nothing in the actual body...
 }
 
 Grammar::~Grammar() {
-	foreach (std::vector<Set*>, sets_list, iter_set, iter_set_end) {
+	foreach (iter_set, sets_list) {
 		destroySet(*iter_set);
 	}
 
-	foreach (SetSet, sets_all, rsets, rsets_end) {
+	foreach (rsets, sets_all) {
 		delete *rsets;
 	}
-	
+
 	Taguint32HashMap::iterator iter_stag;
-	for (iter_stag = single_tags.begin() ; iter_stag != single_tags.end() ; ++iter_stag) {
+	for (iter_stag = single_tags.begin(); iter_stag != single_tags.end(); ++iter_stag) {
 		if (iter_stag->second) {
 			delete iter_stag->second;
 		}
 	}
 
-	foreach (RuleVector, rule_by_number, iter_rules, iter_rules_end) {
+	foreach (iter_rules, rule_by_number) {
 		delete *iter_rules;
 	}
 
-	foreach (ContextVector, contexts_list, it, it_end) {
-		delete *it;
+	for (BOOST_AUTO(cntx, contexts.begin()); cntx != contexts.end(); ++cntx) {
+		delete cntx->second;
 	}
-}
-
-void Grammar::addPreferredTarget(UChar *to) {
-	Tag *tag = allocateTag(to);
-	preferred_targets.push_back(tag->hash);
 }
 
 void Grammar::addSet(Set *& to) {
@@ -88,10 +84,10 @@ void Grammar::addSet(Set *& to) {
 		u_fprintf(ux_stderr, "Warning: Set name %S looks like a misattempt of template usage on line %u.\n", to->name.c_str(), to->line);
 	}
 
-	if (!to->sets.empty() && !(to->type & (ST_TAG_UNIFY|ST_CHILD_UNIFY|ST_SET_UNIFY))) {
+	if (!to->sets.empty() && !(to->type & (ST_TAG_UNIFY | ST_CHILD_UNIFY | ST_SET_UNIFY))) {
 		bool all_tags = true;
-		for (size_t i=0 ; i<to->sets.size() ; ++i) {
-			if (i > 0 && to->set_ops[i-1] != S_OR) {
+		for (size_t i = 0; i < to->sets.size(); ++i) {
+			if (i > 0 && to->set_ops[i - 1] != S_OR) {
 				all_tags = false;
 				break;
 			}
@@ -111,8 +107,9 @@ void Grammar::addSet(Set *& to) {
 		}
 
 		if (all_tags) {
-			for (size_t i=0 ; i<to->sets.size() ; ++i) {
+			for (size_t i = 0; i < to->sets.size(); ++i) {
 				Set *s = getSet(to->sets[i]);
+				maybe_used_sets.insert(s);
 				TagVector tv = trie_getTagList(s->getNonEmpty());
 				if (tv.size() == 1) {
 					addTagToSet(tv[0], to);
@@ -174,9 +171,9 @@ void Grammar::addSet(Set *& to) {
 					positive->trie_special.erase(pit);
 				}
 			}
-			UString str = iter->toUString(true);
-			str.erase(str.find('^'), 1);
-			Tag *tag = allocateTag(str.c_str());
+			Tag *tag = new Tag(*iter);
+			tag->type &= ~T_FAILFAST;
+			tag = addTag(tag);
 			addTagToSet(tag, negative);
 		}
 
@@ -199,7 +196,7 @@ void Grammar::addSet(Set *& to) {
 	}
 
 	uint32_t chash = to->rehash();
-	for (; to->name[0] != '_' || to->name[1] != 'G' || to->name[2] != '_' ;) {
+	for (; to->name[0] != '_' || to->name[1] != 'G' || to->name[2] != '_';) {
 		uint32_t nhash = hash_value(to->name.c_str());
 		if (sets_by_name.find(nhash) != sets_by_name.end()) {
 			Set *a = sets_by_contents.find(sets_by_name.find(nhash)->second)->second;
@@ -221,14 +218,14 @@ void Grammar::addSet(Set *& to) {
 				CG3Quit(1);
 			}
 			else {
-				for (uint32_t seed=0 ; seed<1000 ; ++seed) {
-					if (sets_by_name.find(nhash+seed) == sets_by_name.end()) {
+				for (uint32_t seed = 0; seed < 1000; ++seed) {
+					if (sets_by_name.find(nhash + seed) == sets_by_name.end()) {
 						if (verbosity_level > 0 && (to->name[0] != '_' || to->name[1] != 'G' || to->name[2] != '_')) {
 							u_fprintf(ux_stderr, "Warning: Set %S got hash seed %u.\n", to->name.c_str(), seed);
 							u_fflush(ux_stderr);
 						}
 						set_name_seeds[to->name] = seed;
-						sets_by_name[nhash+seed] = chash;
+						sets_by_name[nhash + seed] = chash;
 						break;
 					}
 				}
@@ -244,9 +241,7 @@ void Grammar::addSet(Set *& to) {
 		if (a != to) {
 			a->reindex(*this);
 			to->reindex(*this);
-			if ((a->type & (ST_SPECIAL|ST_TAG_UNIFY|ST_CHILD_UNIFY|ST_SET_UNIFY)) != (to->type & (ST_SPECIAL|ST_TAG_UNIFY|ST_CHILD_UNIFY|ST_SET_UNIFY))
-			|| a->set_ops.size() != to->set_ops.size() || a->sets.size() != to->sets.size()
-			|| a->trie.size() != to->trie.size() || a->trie_special.size() != to->trie_special.size()) {
+			if ((a->type & (ST_SPECIAL | ST_TAG_UNIFY | ST_CHILD_UNIFY | ST_SET_UNIFY)) != (to->type & (ST_SPECIAL | ST_TAG_UNIFY | ST_CHILD_UNIFY | ST_SET_UNIFY)) || a->set_ops.size() != to->set_ops.size() || a->sets.size() != to->sets.size() || a->trie.size() != to->trie.size() || a->trie_special.size() != to->trie_special.size()) {
 				u_fprintf(ux_stderr, "Error: Content hash collision between set %S on line %u and %S on line %u!\n", a->name.c_str(), a->line, to->name.c_str(), to->line);
 				CG3Quit(1);
 			}
@@ -294,59 +289,125 @@ void Grammar::addSetToList(Set *s) {
 	if (s->number == 0) {
 		if (sets_list.empty() || sets_list[0] != s) {
 			if (!s->sets.empty()) {
-				foreach (uint32Vector, s->sets, sit, sit_end) {
+				foreach (sit, s->sets) {
 					addSetToList(getSet(*sit));
 				}
 			}
 			sets_list.push_back(s);
-			s->number = (uint32_t)sets_list.size()-1;
+			s->number = (uint32_t)sets_list.size() - 1;
 		}
 	}
 }
 
-Set *Grammar::parseSet(const UChar *name) {
-	uint32_t sh = hash_value(name);
+void Grammar::allocateDummySet() {
+	Set *set_c = allocateSet();
+	set_c->line = 0;
+	set_c->setName(stringbits[S_IGNORE].getTerminatedBuffer());
+	Tag *t = allocateTag(stringbits[S_IGNORE].getTerminatedBuffer());
+	addTagToSet(t, set_c);
+	addSet(set_c);
+	set_c->number = std::numeric_limits<uint32_t>::max();
+	sets_list.insert(sets_list.begin(), set_c);
+}
 
-	if (ux_isSetOp(name) != S_IGNORE) {
-		u_fprintf(ux_stderr, "Error: Found set operator '%S' where set name expected on line %u!\n", name, lines);
-		CG3Quit(1);
-	}
-
-	if ((
-	(name[0] == '$' && name[1] == '$')
-	|| (name[0] == '&' && name[1] == '&')
-	) && name[2]) {
-		const UChar *wname = &(name[2]);
-		uint32_t wrap = hash_value(wname);
-		Set *wtmp = getSet(wrap);
-		if (!wtmp) {
-			u_fprintf(ux_stderr, "Error: Attempted to reference undefined set '%S' on line %u!\n", wname, lines);
-			CG3Quit(1);
-		}
-		Set *tmp = getSet(sh);
-		if (!tmp) {
-			Set *ns = allocateSet();
-			ns->line = lines;
-			ns->setName(name);
-			ns->sets.push_back(wtmp->hash);
-			if (name[0] == '$' && name[1] == '$') {
-				ns->type |= ST_TAG_UNIFY;
+uint32_t Grammar::removeNumericTags(uint32_t s) {
+	Set *set = getSet(s);
+	if (!set->sets.empty()) {
+		bool did = false;
+		BOOST_AUTO(sets, set->sets);
+		for (size_t i = 0; i < sets.size(); ++i) {
+			uint32_t ns = removeNumericTags(sets[i]);
+			if (ns == 0) {
+				set = getSet(sets[i]);
+				u_fprintf(ux_stderr, "Error: Removing numeric tags for branch resulted in set %S on line %u being empty!\n", set->name.c_str(), set->line);
+				CG3Quit(1);
 			}
-			else if (name[0] == '&' && name[1] == '&') {
-				ns->type |= ST_SET_UNIFY;
+			if (ns != sets[i]) {
+				sets[i] = ns;
+				did = true;
+			}
+		}
+		if (did) {
+			Set *ns = allocateSet();
+			ns->type = set->type;
+			ns->line = set->line;
+			ns->name = stringbits[S_GPREFIX].getTerminatedBuffer();
+			ns->name += set->name;
+			ns->name += '_';
+			ns->name += 'B';
+			ns->name += '_';
+			ns->sets = sets;
+			ns->set_ops = set->set_ops;
+			addSet(ns);
+			set = ns;
+		}
+	}
+	else {
+		bool did = false;
+		std::map<TagVector, bool> ntags;
+		TagVector tags;
+		const trie_t *tries[2] = { &set->trie, &set->trie_special };
+		for (size_t i = 0; i < 2; ++i) {
+			if (tries[i]->empty()) {
+				continue;
+			}
+			BOOST_AUTO(ctags, trie_getTags(*tries[i]));
+			for (BOOST_AUTO(it, ctags.begin()); it != ctags.end(); ++it) {
+				bool special = false;
+				tags.clear();
+				fill_tagvector(*it, tags, did, special);
+				if (!tags.empty()) {
+					ntags[tags] = special;
+				}
+			}
+		}
+
+		if (!set->ff_tags.empty()) {
+			bool special = false;
+			tags.clear();
+			fill_tagvector(set->ff_tags, tags, did, special);
+			if (!tags.empty()) {
+				ntags[tags] = special;
+			}
+		}
+
+		if (did) {
+			if (ntags.empty()) {
+				tags.clear();
+				tags.push_back(single_tags[tag_any]);
+				ntags[tags] = true;
+				if (verbosity_level > 0) {
+					u_fprintf(ux_stderr, "Warning: Set %S was empty and replaced with the * set in the C branch on line %u.\n", set->name.c_str(), set->line);
+					u_fflush(ux_stderr);
+				}
+			}
+			Set *ns = allocateSet();
+			ns->type = set->type;
+			ns->line = set->line;
+			ns->name = stringbits[S_GPREFIX].getTerminatedBuffer();
+			ns->name += set->name;
+			ns->name += '_';
+			ns->name += 'B';
+			ns->name += '_';
+
+			for (BOOST_AUTO(it, ntags.begin()); it != ntags.end(); ++it) {
+				if (it->second) {
+					if (it->first.size() == 1 && (it->first[0]->type & T_FAILFAST)) {
+						ns->ff_tags.insert(it->first[0]);
+					}
+					else {
+						trie_insert(ns->trie_special, it->first);
+					}
+				}
+				else {
+					trie_insert(ns->trie, it->first);
+				}
 			}
 			addSet(ns);
+			set = ns;
 		}
 	}
-	if (set_alias.find(sh) != set_alias.end()) {
-		sh = set_alias[sh];
-	}
-	Set *tmp = getSet(sh);
-	if (!tmp) {
-		u_fprintf(ux_stderr, "Error: Attempted to reference undefined set '%S' on line %u!\n", name, lines);
-		CG3Quit(1);
-	}
-	return tmp;
+	return set->hash;
 }
 
 Rule *Grammar::allocateRule() {
@@ -366,14 +427,14 @@ Tag *Grammar::allocateTag() {
 	return new Tag;
 }
 
-Tag *Grammar::allocateTag(const UChar *txt, bool raw) {
+Tag *Grammar::allocateTag(const UChar *txt) {
+	if (txt[0] == 0) {
+		u_fprintf(ux_stderr, "Error: Empty tag on line %u! Forgot to fill in a ()?\n", lines);
+		CG3Quit(1);
+	}
 	if (txt[0] == '(') {
 		u_fprintf(ux_stderr, "Error: Tag '%S' cannot start with ( on line %u! Possible extra opening ( or missing closing ) to the left. If you really meant it, escape it as \\(.\n", txt, lines);
 		CG3Quit(1);
-	}
-	if (!raw && ux_isSetOp(txt) != S_IGNORE) {
-		u_fprintf(ux_stderr, "Warning: Tag '%S' on line %u looks like a set operator. Maybe you meant to do SET instead of LIST?\n", txt, lines);
-		u_fflush(ux_stderr);
 	}
 	Taguint32HashMap::iterator it;
 	uint32_t thash = hash_value(txt);
@@ -382,18 +443,21 @@ Tag *Grammar::allocateTag(const UChar *txt, bool raw) {
 	}
 
 	Tag *tag = new Tag();
-	if (raw) {
-		tag->parseTagRaw(txt, this);
-	}
-	else {
-		tag->parseTag(txt, ux_stderr, this);
-	}
+	tag->parseTagRaw(txt, this);
+	return addTag(tag);
+}
+
+Tag *Grammar::addTag(Tag *tag) {
 	tag->type |= T_GRAMMAR;
 	uint32_t hash = tag->rehash();
 	for (uint32_t seed = 0; seed < 10000; seed++) {
 		uint32_t ih = hash + seed;
+		Taguint32HashMap::iterator it;
 		if ((it = single_tags.find(ih)) != single_tags.end()) {
 			Tag *t = it->second;
+			if (t == tag) {
+				return tag;
+			}
 			if (t->tag == tag->tag) {
 				hash += seed;
 				delete tag;
@@ -402,13 +466,13 @@ Tag *Grammar::allocateTag(const UChar *txt, bool raw) {
 		}
 		else {
 			if (verbosity_level > 0 && seed) {
-				u_fprintf(ux_stderr, "Warning: Tag %S got hash seed %u.\n", txt, seed);
+				u_fprintf(ux_stderr, "Warning: Tag %S got hash seed %u.\n", tag->tag.c_str(), seed);
 				u_fflush(ux_stderr);
 			}
 			tag->seed = seed;
 			hash = tag->rehash();
 			single_tags_list.push_back(tag);
-			tag->number = (uint32_t)single_tags_list.size()-1;
+			tag->number = (uint32_t)single_tags_list.size() - 1;
 			single_tags[hash] = tag;
 			break;
 		}
@@ -447,18 +511,16 @@ ContextualTest *Grammar::addContextualTest(ContextualTest *t) {
 	t->rehash();
 
 	t->linked = addContextualTest(t->linked);
-	foreach (ContextList, t->ors, it, it_end) {
-		*it = addContextualTest(*it);
+	boost_foreach (ContextualTest *& it, t->ors) {
+		it = addContextualTest(it);
 	}
 
 	for (uint32_t seed = 0; seed < 1000; ++seed) {
-		contexts_t::iterator cit = contexts.find(t->hash+seed);
+		contexts_t::iterator cit = contexts.find(t->hash + seed);
 		if (cit == contexts.end()) {
-			contexts[t->hash+seed] = t;
+			contexts[t->hash + seed] = t;
 			t->hash += seed;
 			t->seed = seed;
-			contexts_list.push_back(t);
-			t->number = contexts_list.size();
 			if (verbosity_level > 1 && seed) {
 				u_fprintf(ux_stderr, "Warning: Context on line %u got hash seed %u.\n", t->line, seed);
 				u_fflush(ux_stderr);
@@ -484,11 +546,10 @@ void Grammar::addTemplate(ContextualTest *test, const UChar *name) {
 		CG3Quit(1);
 	}
 	templates[cn] = test;
-	template_list.push_back(test);
 }
 
 void Grammar::addAnchor(const UChar *to, uint32_t at, bool primary) {
-	uint32_t ah = allocateTag(to, true)->hash;
+	uint32_t ah = allocateTag(to)->hash;
 	uint32FlatHashMap::iterator it = anchors.find(ah);
 	if (primary && it != anchors.end()) {
 		u_fprintf(ux_stderr, "Error: Redefinition attempt for anchor '%S' on line %u!\n", to, lines);
@@ -505,27 +566,33 @@ void Grammar::addAnchor(const UChar *to, uint32_t at, bool primary) {
 
 void Grammar::resetStatistics() {
 	total_time = 0;
-	for (uint32_t j=0;j<rules.size();j++) {
+	for (uint32_t j = 0; j < rules.size(); j++) {
 		rules[j]->resetStatistics();
 	}
 }
 
 void Grammar::renameAllRules() {
-	foreach (RuleVector, rule_by_number, iter_rule, iter_rule_end) {
+	foreach (iter_rule, rule_by_number) {
 		Rule *r = *iter_rule;
 		gbuffers[0][0] = 0;
 		u_sprintf(&gbuffers[0][0], "L%u", r->line);
 		r->setName(&gbuffers[0][0]);
 	}
-};
+}
 
-void Grammar::reindex(bool unused_sets) {
-	foreach (Setuint32HashMap, sets_by_contents, dset, dset_end) {
-		dset->second->type &= ~ST_USED;
+void Grammar::reindex(bool unused_sets, bool used_tags) {
+	foreach (dset, sets_by_contents) {
+		if (dset->second->number == std::numeric_limits<uint32_t>::max()) {
+			dset->second->type |= ST_USED;
+			continue;
+		}
+		if (!(dset->second->type & ST_STATIC)) {
+			dset->second->type &= ~ST_USED;
+		}
 		dset->second->number = 0;
 	}
 
-	foreach (static_sets_t, static_sets, sset, sset_end) {
+	foreach (sset, static_sets) {
 		uint32_t sh = hash_value(*sset);
 		if (set_alias.find(sh) != set_alias.end()) {
 			u_fprintf(ux_stderr, "Error: Static set %S is an alias; only real sets may be made static!\n", (*sset).c_str());
@@ -552,63 +619,37 @@ void Grammar::reindex(bool unused_sets) {
 	after_sections.clear();
 	null_section.clear();
 	sections.clear();
-	sets_list.clear();
+	if (!is_binary) {
+		sets_list.resize(1);
+		sets_list[0]->number = 0;
+	}
 	set_name_seeds.clear();
 	sets_any = 0;
 	rules_any = 0;
 
-	foreach (Setuint32HashMap, sets_by_contents, dset, dset_end) {
-		Set *to = dset->second;
-		if (to->type & ST_STATIC) {
-			uint32_t nhash = hash_value(to->name);
-			const uint32_t chash = to->hash;
-
-			if (sets_by_name.find(nhash) == sets_by_name.end()) {
-				sets_by_name[nhash] = chash;
-			}
-			else if (chash != sets_by_contents.find(sets_by_name.find(nhash)->second)->second->hash) {
-				Set *a = sets_by_contents.find(sets_by_name.find(nhash)->second)->second;
-				if (a->name == to->name) {
-					u_fprintf(ux_stderr, "Error: Static set %S already defined. Redefinition attempted!\n", a->name.c_str());
-					CG3Quit(1);
-				}
-				else {
-					for (uint32_t seed=0 ; seed<1000 ; ++seed) {
-						if (sets_by_name.find(nhash+seed) == sets_by_name.end()) {
-							if (verbosity_level > 0) {
-								u_fprintf(ux_stderr, "Warning: Static set %S got hash seed %u.\n", to->name.c_str(), seed);
-								u_fflush(ux_stderr);
-							}
-							set_name_seeds[to->name] = seed;
-							sets_by_name[nhash+seed] = chash;
-							break;
-						}
-					}
-				}
-			}
-		}
-	}
-
-	foreach (TagVector, single_tags_list, iter, iter_end) {
-		if ((*iter)->regexp && (*iter)->tag[0] == '/') {
+	foreach (iter, single_tags_list) {
+		if ((*iter)->regexp && (*iter)->tag[0] != '"' && (*iter)->tag[0] != '<') {
 			regex_tags.insert((*iter)->regexp);
 		}
-		if (((*iter)->type & T_CASE_INSENSITIVE) && (*iter)->tag[0] == '/') {
+		if (((*iter)->type & T_CASE_INSENSITIVE) && (*iter)->tag[0] != '"' && (*iter)->tag[0] != '<') {
 			icase_tags.insert((*iter));
+		}
+		if (is_binary) {
+			continue;
 		}
 		if (!(*iter)->vs_sets) {
 			continue;
 		}
-		foreach (SetVector, *(*iter)->vs_sets, sit, sit_end) {
+		foreach (sit, *(*iter)->vs_sets) {
 			(*sit)->markUsed(*this);
 		}
 	}
 
-	foreach (TagVector, single_tags_list, titer, titer_end) {
+	foreach (titer, single_tags_list) {
 		if ((*titer)->type & T_TEXTUAL) {
 			continue;
 		}
-		foreach (Grammar::regex_tags_t, regex_tags, iter, iter_end) {
+		foreach (iter, regex_tags) {
 			UErrorCode status = U_ZERO_ERROR;
 			uregex_setText(*iter, (*titer)->tag.c_str(), (*titer)->tag.length(), &status);
 			if (status == U_ZERO_ERROR) {
@@ -617,7 +658,7 @@ void Grammar::reindex(bool unused_sets) {
 				}
 			}
 		}
-		foreach (Grammar::icase_tags_t, icase_tags, iter, iter_end) {
+		foreach (iter, icase_tags) {
 			UErrorCode status = U_ZERO_ERROR;
 			if (u_strCaseCompare((*titer)->tag.c_str(), (*titer)->tag.length(), (*iter)->tag.c_str(), (*iter)->tag.length(), U_FOLD_CASE_DEFAULT, &status) == 0) {
 				(*titer)->type |= T_TEXTUAL;
@@ -629,13 +670,21 @@ void Grammar::reindex(bool unused_sets) {
 		}
 	}
 
-#ifdef TR_RATIO
-	boost::unordered_map<std::pair<uint32_t, uint32_t>, size_t> unique_targets;
-	size_t max_target = 0;
-#endif
-	foreach (RuleVector, rule_by_number, iter_rule, iter_rule_end) {
+	for (BOOST_AUTO(it, parentheses.begin()); it != parentheses.end(); ++it) {
+		single_tags[it->first]->markUsed();
+		single_tags[it->second]->markUsed();
+	}
+
+	for (BOOST_AUTO(it, preferred_targets.begin()); it != preferred_targets.end(); ++it) {
+		single_tags[*it]->markUsed();
+	}
+
+	foreach (iter_rule, rule_by_number) {
 		if ((*iter_rule)->wordform) {
 			wf_rules.push_back(*iter_rule);
+		}
+		if (is_binary) {
+			continue;
 		}
 		Set *s = 0;
 		s = getSet((*iter_rule)->target);
@@ -657,48 +706,37 @@ void Grammar::reindex(bool unused_sets) {
 		if ((*iter_rule)->dep_target) {
 			(*iter_rule)->dep_target->markUsed(*this);
 		}
-		foreach (ContextList, (*iter_rule)->tests, it, it_end) {
+		foreach (it, (*iter_rule)->tests) {
 			(*it)->markUsed(*this);
 		}
-		foreach (ContextList, (*iter_rule)->dep_tests, it, it_end) {
+		foreach (it, (*iter_rule)->dep_tests) {
 			(*it)->markUsed(*this);
 		}
-#ifdef TR_RATIO
-		size_t& ut = unique_targets[std::make_pair((*iter_rule)->wordform, (*iter_rule)->target)];
-		++ut;
-		max_target = std::max(max_target, ut);
-#endif
 	}
 
-#ifdef TR_RATIO
-	double avg = rule_by_number.size() / static_cast<double>(unique_targets.size());
-	double vsum = 0.0;
-	for (const auto& v : unique_targets) {
-		vsum += std::pow(v.second - avg, 2.0);
-	}
-	double var = vsum / unique_targets.size();
+	if (!is_binary) {
+		if (delimiters) {
+			delimiters->markUsed(*this);
+		}
+		if (soft_delimiters) {
+			soft_delimiters->markUsed(*this);
+		}
 
-	u_fprintf(ux_stderr, "Target:Rule ratios: %u rules, %u unique targets, %u max rules, %f average, %f variance, %f stddev\n", rule_by_number.size(), unique_targets.size(), max_target, avg, var, std::sqrt(var));
-	u_fflush(ux_stderr);
-#endif
-
-	if (delimiters) {
-		delimiters->markUsed(*this);
-	}
-	if (soft_delimiters) {
-		soft_delimiters->markUsed(*this);
-	}
-
-	// This is only necessary due to binary grammars.
-	// Sets used in unused templates may otherwise crash the loading of a binary grammar.
-	foreach (std::vector<ContextualTest*>, template_list, tmpls, tmpls_end) {
-		(*tmpls)->markUsed(*this);
+		contexts_t tosave;
+		for (BOOST_AUTO(cntx, contexts.begin()); cntx != contexts.end(); ++cntx) {
+			if (cntx->second->is_used) {
+				tosave[cntx->first] = cntx->second;
+				continue;
+			}
+			delete cntx->second;
+		}
+		contexts.swap(tosave);
 	}
 
 	if (unused_sets) {
 		u_fprintf(ux_stdout, "Unused sets:\n");
-		foreach (Setuint32HashMap, sets_by_contents, rset, rset_end) {
-			if (!(rset->second->type & ST_USED) && !rset->second->name.empty()) {
+		foreach (rset, sets_by_contents) {
+			if (!(rset->second->type & ST_USED) && !rset->second->name.empty() && maybe_used_sets.count(rset->second) == 0) {
 				if (rset->second->name[0] != '_' || rset->second->name[1] != 'G' || rset->second->name[2] != '_') {
 					u_fprintf(ux_stdout, "Line %u set %S\n", rset->second->line, rset->second->name.c_str());
 				}
@@ -710,14 +748,13 @@ void Grammar::reindex(bool unused_sets) {
 
 	// Stuff below this line is not optional...
 
-	foreach (Setuint32HashMap, sets_by_contents, tset, tset_end) {
+	foreach (tset, sets_by_contents) {
 		if (tset->second->type & ST_USED) {
 			addSetToList(tset->second);
 		}
 	}
 
-	Taguint32HashMap::iterator iter_tags;
-	for (iter_tags = single_tags.begin() ; iter_tags != single_tags.end() ; ++iter_tags) {
+	for (BOOST_AUTO(iter_tags, single_tags.begin()); iter_tags != single_tags.end(); ++iter_tags) {
 		Tag *tag = iter_tags->second;
 		if (tag->tag[0] == mapping_prefix) {
 			tag->type |= T_MAPPING;
@@ -727,16 +764,21 @@ void Grammar::reindex(bool unused_sets) {
 		}
 	}
 
-	foreach (Setuint32HashMap, sets_by_contents, iter_sets, iter_sets_end) {
-		if (iter_sets->second->type & ST_USED) {
-			iter_sets->second->reindex(*this);
-			indexSets(iter_sets->first, iter_sets->second);
+	if (!is_binary) {
+		boost_foreach (Set *set, sets_list) {
+			set->reindex(*this);
 		}
+		boost_foreach (Set *set, sets_list) {
+			setAdjustSets(set);
+		}
+	}
+	boost_foreach (Set *set, sets_list) {
+		indexSets(set->number, set);
 	}
 
 	uint32SortedVector sects;
 
-	foreach (RuleVector, rule_by_number, iter_rule, iter_rule_end) {
+	foreach (iter_rule, rule_by_number) {
 		if ((*iter_rule)->section == -1) {
 			before_sections.push_back(*iter_rule);
 		}
@@ -751,22 +793,217 @@ void Grammar::reindex(bool unused_sets) {
 			rules.push_back(*iter_rule);
 		}
 		if ((*iter_rule)->target) {
-			indexSetToRule((*iter_rule)->number, getSet((*iter_rule)->target));
+			Set *set = 0;
+			if (is_binary) {
+				set = sets_list[(*iter_rule)->target];
+			}
+			else {
+				set = sets_by_contents.find((*iter_rule)->target)->second;
+				(*iter_rule)->target = set->number;
+			}
+			indexSetToRule((*iter_rule)->number, set);
 			rules_by_set[(*iter_rule)->target].insert((*iter_rule)->number);
 		}
 		else {
 			u_fprintf(ux_stderr, "Warning: Rule on line %u had no target.\n", (*iter_rule)->line);
 			u_fflush(ux_stderr);
 		}
+		if (((*iter_rule)->maplist && ((*iter_rule)->maplist->type & ST_CHILD_UNIFY)) || ((*iter_rule)->sublist && ((*iter_rule)->sublist->type & ST_CHILD_UNIFY))) {
+			(*iter_rule)->flags |= FL_CAPTURE_UNIF;
+		}
+		if (is_binary) {
+			continue;
+		}
+		if ((*iter_rule)->childset1) {
+			Set *set = sets_by_contents.find((*iter_rule)->childset1)->second;
+			(*iter_rule)->childset1 = set->number;
+		}
+		if ((*iter_rule)->childset2) {
+			Set *set = sets_by_contents.find((*iter_rule)->childset2)->second;
+			(*iter_rule)->childset2 = set->number;
+		}
+		if ((*iter_rule)->dep_target) {
+			contextAdjustTarget((*iter_rule)->dep_target);
+		}
+		boost_foreach (ContextualTest *test, (*iter_rule)->tests) {
+			contextAdjustTarget(test);
+		}
+		boost_foreach (ContextualTest *test, (*iter_rule)->dep_tests) {
+			contextAdjustTarget(test);
+		}
 	}
 
-	sections.insert(sections.end(), sects.begin(), sects.end());
+	if (!sects.empty()) {
+		for (uint32_t i = 0; i <= sects.back(); ++i) {
+			sections.push_back(i);
+		}
+	}
 
 	if (sets_by_tag.find(tag_any) != sets_by_tag.end()) {
 		sets_any = &sets_by_tag[tag_any];
 	}
 	if (rules_by_tag.find(tag_any) != rules_by_tag.end()) {
 		rules_any = &rules_by_tag[tag_any];
+	}
+
+	sets_by_contents.clear();
+
+	boost_foreach (Set *to, sets_list) {
+		if (to->type & ST_STATIC) {
+			uint32_t nhash = hash_value(to->name);
+			const uint32_t cnum = to->number;
+
+			if (sets_by_name.find(nhash) == sets_by_name.end()) {
+				sets_by_name[nhash] = cnum;
+			}
+			else if (cnum != sets_list[sets_by_name.find(nhash)->second]->number) {
+				Set *a = sets_list[sets_by_name.find(nhash)->second];
+				if (a->name == to->name) {
+					u_fprintf(ux_stderr, "Error: Static set %S already defined. Redefinition attempted!\n", a->name.c_str());
+					CG3Quit(1);
+				}
+				else {
+					for (uint32_t seed = 0; seed < 1000; ++seed) {
+						if (sets_by_name.find(nhash + seed) == sets_by_name.end()) {
+							if (verbosity_level > 0) {
+								u_fprintf(ux_stderr, "Warning: Static set %S got hash seed %u.\n", to->name.c_str(), seed);
+								u_fflush(ux_stderr);
+							}
+							set_name_seeds[to->name] = seed;
+							sets_by_name[nhash + seed] = cnum;
+							break;
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Gather knowledge of which sets have varstrings
+	boost::dynamic_bitset<> sets_vstr(sets_list.size());
+	bool did = true;
+	while (did) {
+		did = false;
+		foreach (set, sets_list) {
+			if (sets_vstr.test((*set)->number)) {
+				continue;
+			}
+			foreach (iset, (*set)->sets) {
+				if (sets_vstr.test(*iset)) {
+					sets_vstr.set((*set)->number);
+					did = true;
+					break;
+				}
+			}
+			if (trie_hasType((*set)->trie, T_VARSTRING) || trie_hasType((*set)->trie_special, T_VARSTRING)) {
+				sets_vstr.set((*set)->number);
+				did = true;
+			}
+		}
+	}
+
+	// Gather knowledge of which contexts use unification or varstrings
+	bc::flat_set<ContextualTest*> nk;
+	did = true;
+	while (did) {
+		did = false;
+
+		foreach (cntx, contexts) {
+			ContextualTest *t = cntx->second;
+
+			if (nk.count(t)) {
+				continue;
+			}
+
+			if (t->tmpl && nk.count(t->tmpl)) {
+				//u_fprintf(ux_stderr, "added tmpl %u\n", t->line);
+				did |= nk.insert(t).second;
+				continue;
+			}
+			if (t->linked && nk.count(t->linked)) {
+				//u_fprintf(ux_stderr, "added linked %u\n", t->line);
+				did |= nk.insert(t).second;
+				continue;
+			}
+			if (t->target && (sets_list[t->target]->type & MASK_ST_UNIFY)) {
+				//u_fprintf(ux_stderr, "added target %u\n", t->line);
+				did |= nk.insert(t).second;
+				continue;
+			}
+			if (t->target && sets_vstr.test(t->target)) {
+				//u_fprintf(ux_stderr, "added target %u\n", t->line);
+				did |= nk.insert(t).second;
+				continue;
+			}
+			if (t->barrier && (sets_list[t->barrier]->type & MASK_ST_UNIFY)) {
+				//u_fprintf(ux_stderr, "added barrier %u\n", t->line);
+				did |= nk.insert(t).second;
+				continue;
+			}
+			if (t->barrier && sets_vstr.test(t->barrier)) {
+				//u_fprintf(ux_stderr, "added target %u\n", t->line);
+				did |= nk.insert(t).second;
+				continue;
+			}
+			if (t->cbarrier && (sets_list[t->cbarrier]->type & MASK_ST_UNIFY)) {
+				//u_fprintf(ux_stderr, "added cbarrier %u\n", t->line);
+				did |= nk.insert(t).second;
+				continue;
+			}
+			if (t->cbarrier && sets_vstr.test(t->cbarrier)) {
+				//u_fprintf(ux_stderr, "added target %u\n", t->line);
+				did |= nk.insert(t).second;
+				continue;
+			}
+		}
+	}
+
+	foreach (it, rule_by_number) {
+		Rule *r = *it;
+
+		// Determine whether this rule probably needs KEEPORDER
+		if (r->flags & RF_KEEPORDER) {
+			continue;
+		}
+		/* While this is a good indication that the unified set is used in the target, it is not 100%
+		if (r->target && (sets_list[r->target]->type & MASK_ST_UNIFY)) {
+			continue;
+		}
+		//*/
+		bool needs = false;
+		if (r->dep_target && nk.count(r->dep_target)) {
+			needs = true;
+		}
+		foreach (cntx, r->tests) {
+			if (nk.count(*cntx)) {
+				needs = true;
+			}
+		}
+		foreach (cntx, r->dep_tests) {
+			if (nk.count(*cntx)) {
+				needs = true;
+			}
+		}
+		if (needs) {
+			r->flags |= RF_KEEPORDER;
+			/* We can do the whole thing fully automatically, so explicit KEEPORDER will eventually be deprecated
+			if (verbosity_level) {
+				u_fprintf(ux_stderr, "Warning: Rule on line %u probably needs KEEPORDER.\n", r->line);
+				u_fflush(ux_stderr);
+			}
+			//*/
+		}
+	}
+
+	if (used_tags) {
+		for (BOOST_AUTO(iter_tags, single_tags.begin()); iter_tags != single_tags.end(); ++iter_tags) {
+			Tag *tag = iter_tags->second;
+			if (tag->type & T_USED) {
+				UString tmp(tag->toUString(true));
+				u_fprintf(ux_stdout, "%S\n", tmp.c_str());
+			}
+		}
+		exit(0);
 	}
 }
 
@@ -780,7 +1017,7 @@ inline void trie_indexToRule(const trie_t& trie, Grammar& grammar, uint32_t r) {
 }
 
 void Grammar::indexSetToRule(uint32_t r, Set *s) {
-	if (s->type & (ST_SPECIAL|ST_TAG_UNIFY)) {
+	if (s->type & (ST_SPECIAL | ST_TAG_UNIFY)) {
 		indexTagToRule(tag_any, r);
 		return;
 	}
@@ -788,8 +1025,8 @@ void Grammar::indexSetToRule(uint32_t r, Set *s) {
 	trie_indexToRule(s->trie, *this, r);
 	trie_indexToRule(s->trie_special, *this, r);
 
-	for (uint32_t i=0 ; i<s->sets.size() ; ++i) {
-		Set *set = sets_by_contents.find(s->sets[i])->second;
+	for (uint32_t i = 0; i < s->sets.size(); ++i) {
+		Set *set = sets_list[s->sets[i]];
 		indexSetToRule(r, set);
 	}
 }
@@ -808,7 +1045,7 @@ inline void trie_indexToSet(const trie_t& trie, Grammar& grammar, uint32_t r) {
 }
 
 void Grammar::indexSets(uint32_t r, Set *s) {
-	if (s->type & (ST_SPECIAL|ST_TAG_UNIFY)) {
+	if (s->type & (ST_SPECIAL | ST_TAG_UNIFY)) {
 		indexTagToSet(tag_any, r);
 		return;
 	}
@@ -816,14 +1053,59 @@ void Grammar::indexSets(uint32_t r, Set *s) {
 	trie_indexToSet(s->trie, *this, r);
 	trie_indexToSet(s->trie_special, *this, r);
 
-	for (uint32_t i=0 ; i<s->sets.size() ; ++i) {
-		Set *set = sets_by_contents.find(s->sets[i])->second;
+	for (uint32_t i = 0; i < s->sets.size(); ++i) {
+		Set *set = sets_list[s->sets[i]];
 		indexSets(r, set);
 	}
 }
 
 void Grammar::indexTagToSet(uint32_t t, uint32_t r) {
-	sets_by_tag[t].insert(r);
+	if (sets_by_tag.find(t) == sets_by_tag.end()) {
+		sets_by_tag[t].resize(sets_list.size());
+	}
+	sets_by_tag[t].set(r);
 }
 
+void Grammar::setAdjustSets(Set *s) {
+	if (!(s->type & ST_USED)) {
+		return;
+	}
+	s->type &= ~ST_USED;
+
+	for (uint32_t i = 0; i < s->sets.size(); ++i) {
+		Set *set = sets_by_contents.find(s->sets[i])->second;
+		s->sets[i] = set->number;
+		setAdjustSets(set);
+	}
+}
+
+void Grammar::contextAdjustTarget(ContextualTest *test) {
+	if (!test->is_used) {
+		return;
+	}
+	test->is_used = false;
+
+	if (test->target) {
+		Set *set = sets_by_contents.find(test->target)->second;
+		test->target = set->number;
+	}
+	if (test->barrier) {
+		Set *set = sets_by_contents.find(test->barrier)->second;
+		test->barrier = set->number;
+	}
+	if (test->cbarrier) {
+		Set *set = sets_by_contents.find(test->cbarrier)->second;
+		test->cbarrier = set->number;
+	}
+
+	boost_foreach (ContextualTest *tor, test->ors) {
+		contextAdjustTarget(tor);
+	}
+	if (test->tmpl) {
+		contextAdjustTarget(test->tmpl);
+	}
+	if (test->linked) {
+		contextAdjustTarget(test->linked);
+	}
+}
 }

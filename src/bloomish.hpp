@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2014, GrammarSoft ApS
+* Copyright (C) 2007-2016, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -38,11 +38,11 @@ public:
 	}
 
 	bloomish(const bloomish<Cont>& other) {
-		std::copy(other.value, other.value+4, &value[0]);
+		std::copy(other.value, other.value + 4, &value[0]);
 	}
 
 	void clear() {
-		std::fill(value, value+4, 0);
+		std::fill(value, value + 4, 0);
 	}
 
 	void insert(const Cont& v) {
@@ -75,7 +75,6 @@ public:
 };
 
 typedef bloomish<uint32_t> uint32Bloomish;
-
 }
 
 #endif

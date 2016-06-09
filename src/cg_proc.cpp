@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2014, GrammarSoft ApS
+* Copyright (C) 2007-2016, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -21,12 +21,16 @@
 
 #include "stdafx.hpp"
 #include "Grammar.hpp"
+#include "TextualParser.hpp"
 #include "BinaryGrammar.hpp"
 #include "ApertiumApplicator.hpp"
+#include "MatxinApplicator.hpp"
 #include "GrammarApplicator.hpp"
 
 #include <getopt.h>
+#ifndef _WIN32
 #include <libgen.h>
+#endif
 
 #include "version.hpp"
 
@@ -35,8 +39,8 @@ using CG3::CG3Quit;
 void endProgram(char *name) {
 	using namespace std;
 	fprintf(stdout, "VISL CG-3 Disambiguator version %u.%u.%u.%u\n",
-		CG3_VERSION_MAJOR, CG3_VERSION_MINOR, CG3_VERSION_PATCH, CG3_REVISION);
-	cout << basename(name) <<": process a stream with a constraint grammar" << endl;
+	  CG3_VERSION_MAJOR, CG3_VERSION_MINOR, CG3_VERSION_PATCH, CG3_REVISION);
+	cout << basename(name) << ": process a stream with a constraint grammar" << endl;
 	cout << "USAGE: " << basename(name) << " [-t] [-s] [-d] [-r rule] grammar_file [input_file [output_file]]" << endl;
 	cout << "Options:" << endl;
 #if HAVE_GETOPT_LONG
@@ -59,15 +63,15 @@ void endProgram(char *name) {
 	cout << "	-d:	 morphological disambiguation (default behaviour)" << endl;
 	cout << "	-s:	 specify number of sections to process" << endl;
 	cout << "	-f: 	 set the format of the I/O stream to NUM," << endl;
-	cout << "		   where `0' is VISL format and `1' is " << endl;
-	cout << "		   Apertium format (default: 1)" << endl;
+	cout << "		   where `0' is VISL format, `1' is " << endl;
+	cout << "		   Apertium format and `2' is Matxin (default: 1)" << endl;
 	cout << "	-r:	 run only the named rule" << endl;
 	cout << "	-t:	 print debug output on stderr" << endl;
 	cout << "	-w:	 enforce surface case on lemma/baseform " << endl;
 	cout << "		   (to work with -w option of lt-proc)" << endl;
 	cout << "	-n:	 do not print out the word form of each cohort" << endl;
 	cout << "	-1:	 only output the first analysis if ambiguity remains" << endl;
-	cout << "	-z:	flush output on the null character" << endl;
+	cout << "	-z:	 flush output on the null character" << endl;
 
 	cout << "	-v:	 version" << endl;
 	cout << "	-h:	 show this help" << endl;
@@ -84,7 +88,7 @@ int main(int argc, char *argv[]) {
 	int sections = 0;
 	int stream_format = 1;
 	bool null_flush = false;
-	char* single_rule = 0;
+	char *single_rule = 0;
 
 	UErrorCode status = U_ZERO_ERROR;
 	UFILE *ux_stdin = 0;
@@ -92,7 +96,7 @@ int main(int argc, char *argv[]) {
 	UFILE *ux_stderr = 0;
 
 #if HAVE_GETOPT_LONG
-	static struct option long_options[] = {
+	struct option long_options[] = {
 		{"disambiguation",	0, 0, 'd'},
 		{"sections", 		0, 0, 's'},
 		{"stream-format",	required_argument, 0, 'f'},
@@ -103,7 +107,7 @@ int main(int argc, char *argv[]) {
 		{"version",   		0, 0, 'v'},
 		{"first",   		0, 0, '1'},
 		{"help",		0, 0, 'h'},
-		{"null-flush",		0, 0, 'z'}
+		{"null-flush",		0, 0, 'z'},
 	};
 #endif
 
@@ -120,62 +124,60 @@ int main(int argc, char *argv[]) {
 			break;
 		}
 
-		switch(c) {
-
-			case 'd':
-				if (cmd == 0) {
-					cmd = c;
-				}
-				else {
-					endProgram(argv[0]);
-				}
-				break;
-
-			case 'f':
-				stream_format = atoi(optarg);
-				break;
-
-			case 't':
-				trace = true;
-				break;
-
-			case 'r':
-				{
-					// strdup() is Posix
-					size_t len = strlen(optarg);
-					single_rule = new char[len];
-					std::copy(optarg, optarg+len, single_rule);
-					break;
-				}
-			case 's':
-				sections = atoi(optarg);
-				break;
-
-			case 'n':
-				print_word_forms = false;
-				break;
-
-			case '1':
-				only_first = true;
-				break;
-
-			case 'w':
-				wordform_case = true;
-				break;
-
-			case 'v':
-				fprintf(stdout, "VISL CG-3 Disambiguator version %u.%u.%u.%u\n",
-					CG3_VERSION_MAJOR, CG3_VERSION_MINOR, CG3_VERSION_PATCH, CG3_REVISION);
-
-				exit(EXIT_SUCCESS);
-				break;
-			case 'z':
-				null_flush = true;
-				break;
-			case 'h':
-			default:
+		switch (c) {
+		case 'd':
+			if (cmd == 0) {
+				cmd = c;
+			}
+			else {
 				endProgram(argv[0]);
-				break;
+			}
+			break;
+
+		case 'f':
+			stream_format = atoi(optarg);
+			break;
+
+		case 't':
+			trace = true;
+			break;
+
+		case 'r': {
+			// strdup() is Posix
+			size_t len = strlen(optarg) + 1;
+			single_rule = new char[len];
+			std::copy(optarg, optarg + len, single_rule);
+			break;
+		}
+		case 's':
+			sections = atoi(optarg);
+			break;
+
+		case 'n':
+			print_word_forms = false;
+			break;
+
+		case '1':
+			only_first = true;
+			break;
+
+		case 'w':
+			wordform_case = true;
+			break;
+
+		case 'v':
+			fprintf(stdout, "VISL CG-3 Disambiguator version %u.%u.%u.%u\n",
+			  CG3_VERSION_MAJOR, CG3_VERSION_MINOR, CG3_VERSION_PATCH, CG3_REVISION);
+
+			exit(EXIT_SUCCESS);
+			break;
+		case 'z':
+			null_flush = true;
+			break;
+		case 'h':
+		default:
+			endProgram(argv[0]);
+			break;
 		}
 	}
 
@@ -226,14 +228,14 @@ int main(int argc, char *argv[]) {
 	}
 	if (optind <= (argc - 2)) {
 		u_fclose(ux_stdin);
-		ux_stdin = u_fopen(argv[optind+1], "rb", locale_default, codepage_default);
+		ux_stdin = u_fopen(argv[optind + 1], "rb", locale_default, codepage_default);
 		if (ux_stdin == NULL) {
 			endProgram(argv[0]);
 		}
 	}
 	if (optind <= (argc - 3)) {
 		u_fclose(ux_stdout);
-		ux_stdout = u_fopen(argv[optind+2], "wb", locale_default, codepage_default);
+		ux_stdout = u_fopen(argv[optind + 2], "wb", locale_default, codepage_default);
 		if (ux_stdout == NULL) {
 			endProgram(argv[0]);
 		}
@@ -243,9 +245,10 @@ int main(int argc, char *argv[]) {
 		parser = new CG3::BinaryGrammar(grammar, ux_stderr);
 	}
 	else {
-		std::cerr << "Info: Text grammar detected -- to process textual " << std::endl;
-		std::cerr << "grammars, use `vislcg3', to compile this grammar, use `cg-comp'" << std::endl;
-		CG3Quit(1);
+		// Forbidding text grammars makes debugging very annoying
+		std::cerr << "Warning: Text grammar detected - to better process textual" << std::endl;
+		std::cerr << "grammars, use `vislcg3'; to compile this grammar, use `cg-comp'" << std::endl;
+		parser = new CG3::TextualParser(grammar, ux_stderr);
 	}
 
 	grammar.ux_stderr = ux_stderr;
@@ -264,8 +267,16 @@ int main(int argc, char *argv[]) {
 	if (stream_format == 0) {
 		applicator = new CG3::GrammarApplicator(ux_stderr);
 	}
+	else if (stream_format == 2) {
+		CG3::MatxinApplicator *matxinApplicator = new CG3::MatxinApplicator(ux_stderr);
+		matxinApplicator->setNullFlush(null_flush);
+		matxinApplicator->wordform_case = wordform_case;
+		matxinApplicator->print_word_forms = print_word_forms;
+		matxinApplicator->print_only_first = only_first;
+		applicator = matxinApplicator;
+	}
 	else {
-		CG3::ApertiumApplicator* apertiumApplicator= new CG3::ApertiumApplicator(ux_stderr);
+		CG3::ApertiumApplicator *apertiumApplicator = new CG3::ApertiumApplicator(ux_stderr);
 		apertiumApplicator->setNullFlush(null_flush);
 		apertiumApplicator->wordform_case = wordform_case;
 		apertiumApplicator->print_word_forms = print_word_forms;
@@ -274,21 +285,22 @@ int main(int argc, char *argv[]) {
 	}
 
 	applicator->setGrammar(&grammar);
-	for (int32_t i=1 ; i<=sections ; i++) {
+	for (int32_t i = 1; i <= sections; i++) {
 		applicator->sections.push_back(i);
 	}
 
 	applicator->trace = trace;
 	applicator->unicode_tags = true;
+	applicator->unique_tags = false;
 
 	// This is if we want to run a single rule  (-r option)
 	if (single_rule) {
 		size_t sn = strlen(single_rule);
-		UChar *buf = new UChar[sn*3];
+		UChar *buf = new UChar[sn * 3];
 		buf[0] = 0;
 		buf[sn] = 0;
 		u_charsToUChars(single_rule, buf, sn);
-		const_foreach (CG3::RuleVector, applicator->grammar->rule_by_number, riter, riter_end) {
+		foreach (riter, applicator->grammar->rule_by_number) {
 			const CG3::Rule *rule = *riter;
 			if (rule->name && u_strcmp(rule->name, buf) == 0) {
 				applicator->valid_rules.push_back(rule->number);
@@ -299,15 +311,13 @@ int main(int argc, char *argv[]) {
 	delete[] single_rule;
 
 	try {
-		switch(cmd) {
-
-			case 'd':
-			default:
-				CG3::istream instream(ux_stdin, !null_flush);
-				applicator->runGrammarOnText(instream, ux_stdout);
-				break;
+		switch (cmd) {
+		case 'd':
+		default:
+			CG3::istream instream(ux_stdin, !null_flush);
+			applicator->runGrammarOnText(instream, ux_stdout);
+			break;
 		}
-
 	}
 	catch (std::exception& e) {
 		std::cerr << e.what();

@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2014, GrammarSoft ApS
+* Copyright (C) 2007-2016, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -30,18 +30,40 @@
 
 namespace CG3 {
 
-Cohort::Cohort(SingleWindow *p) :
-type(0),
-global_number(0),
-local_number(0),
-wordform(0),
-dep_self(0),
-dep_parent(std::numeric_limits<uint32_t>::max()),
-is_pleft(0),
-is_pright(0),
-parent(p),
-prev(0),
-next(0)
+CohortVector pool_cohorts;
+pool_cleaner<CohortVector> cleaner_cohorts(pool_cohorts);
+
+Cohort *alloc_cohort(SingleWindow *p) {
+	Cohort *c = pool_get(pool_cohorts);
+	if (c == 0) {
+		c = new Cohort(p);
+	}
+	else {
+		c->parent = p;
+	}
+	return c;
+}
+
+void free_cohort(Cohort *c) {
+	if (c == 0) {
+		return;
+	}
+	pool_put(pool_cohorts, c);
+}
+
+Cohort::Cohort(SingleWindow *p)
+  : type(0)
+  , global_number(0)
+  , local_number(0)
+  , wordform(0)
+  , dep_self(0)
+  , dep_parent(DEP_NO_PARENT)
+  , is_pleft(0)
+  , is_pright(0)
+  , parent(p)
+  , prev(0)
+  , next(0)
+  , wread(0)
 {
 	#ifdef CG_TRACE_OBJECTS
 	std::cerr << "OBJECT: " << __PRETTY_FUNCTION__ << std::endl;
@@ -53,16 +75,18 @@ Cohort::~Cohort() {
 	std::cerr << "OBJECT: " << __PRETTY_FUNCTION__ << ": " << readings.size() << ", " << deleted.size() << ", " << delayed.size() << std::endl;
 	#endif
 
-	foreach (ReadingList, readings, iter1, iter1_end) {
+	foreach (iter1, readings) {
 		delete (*iter1);
 	}
-	foreach (ReadingList, deleted, iter2, iter2_end) {
+	foreach (iter2, deleted) {
 		delete (*iter2);
 	}
-	foreach (ReadingList, delayed, iter3, iter3_end) {
+	foreach (iter3, delayed) {
 		delete (*iter3);
 	}
-	foreach (CohortVector, removed, iter, iter_end) {
+	delete wread;
+
+	foreach (iter, removed) {
 		delete (*iter);
 	}
 	if (parent) {
@@ -70,6 +94,54 @@ Cohort::~Cohort() {
 		parent->parent->dep_window.erase(global_number);
 	}
 	detach();
+}
+
+void Cohort::clear() {
+	if (parent && parent->parent) {
+		parent->parent->cohort_map.erase(global_number);
+		parent->parent->dep_window.erase(global_number);
+	}
+	detach();
+
+	type = 0;
+	global_number = 0;
+	local_number = 0;
+	wordform = 0;
+	dep_self = 0;
+	dep_parent = DEP_NO_PARENT;
+	is_pleft = 0;
+	is_pright = 0;
+	parent = 0;
+
+	text.clear();
+	num_max.clear();
+	num_min.clear();
+	dep_children.clear();
+	possible_sets.clear();
+	relations.clear();
+	relations_input.clear();
+
+	foreach (iter1, readings) {
+		free_reading(*iter1);
+	}
+	foreach (iter2, deleted) {
+		free_reading(*iter2);
+	}
+	foreach (iter3, delayed) {
+		free_reading(*iter3);
+	}
+	free_reading(wread);
+
+	readings.clear();
+	deleted.clear();
+	delayed.clear();
+	wread = 0;
+
+	foreach (iter, removed) {
+		free_cohort(*iter);
+	}
+	removed.clear();
+	assert(enclosed.empty() && "Enclosed was not empty!");
 }
 
 void Cohort::detach() {
@@ -98,8 +170,8 @@ void Cohort::appendReading(Reading *read) {
 	type &= ~CT_NUM_CURRENT;
 }
 
-Reading* Cohort::allocateAppendReading() {
-	Reading *read = new Reading(this);
+Reading *Cohort::allocateAppendReading() {
+	Reading *read = alloc_reading(this);
 	readings.push_back(read);
 	if (read->number == 0) {
 		read->number = (uint32_t)readings.size() * 1000 + 1000;
@@ -114,7 +186,7 @@ void Cohort::updateMinMax() {
 	}
 	num_min.clear();
 	num_max.clear();
-	const_foreach (ReadingList, readings, rter, rter_end) {
+	foreach (rter, readings) {
 		boost_foreach (Reading::tags_numerical_t::value_type& nter, (*rter)->tags_numerical) {
 			const Tag *tag = nter.second;
 			if (num_min.find(tag->comparison_hash) == num_min.end() || tag->comparison_val < num_min[tag->comparison_hash]) {
@@ -169,5 +241,4 @@ bool Cohort::remRelation(uint32_t rel, uint32_t cohort) {
 	}
 	return false;
 }
-
 }

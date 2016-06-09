@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2014, GrammarSoft ApS
+* Copyright (C) 2007-2016, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -32,9 +32,9 @@ using namespace CG3;
 #include "cg3.h"
 
 namespace {
-	UFILE *ux_stdin = 0;
-	UFILE *ux_stdout = 0;
-	UFILE *ux_stderr = 0;
+UFILE *ux_stdin = 0;
+UFILE *ux_stdout = 0;
+UFILE *ux_stderr = 0;
 }
 
 cg3_status cg3_init(FILE *in, FILE *out, FILE *err) {
@@ -102,7 +102,7 @@ cg3_grammar *cg3_grammar_load(const char *filename) {
 	grammar->ux_stderr = ux_stderr;
 	grammar->ux_stdout = ux_stdout;
 
-	std::auto_ptr<IGrammarParser> parser;
+	boost::scoped_ptr<IGrammarParser> parser;
 
 	if (cbuffers[0][0] == 'C' && cbuffers[0][1] == 'G' && cbuffers[0][2] == '3' && cbuffers[0][3] == 'B') {
 		u_fprintf(ux_stderr, "CG3 Info: Binary grammar detected.\n");
@@ -136,19 +136,19 @@ cg3_applicator *cg3_applicator_create(cg3_grammar *grammar_) {
 
 void cg3_applicator_setflags(cg3_applicator *applicator_, uint32_t flags) {
 	GrammarApplicator *applicator = static_cast<GrammarApplicator*>(applicator_);
-	applicator->ordered            = (flags & CG3F_ORDERED)            != 0;
-	applicator->unsafe             = (flags & CG3F_UNSAFE)             != 0;
-	applicator->apply_mappings     = (flags & CG3F_NO_MAPPINGS)        == 0;
-	applicator->apply_corrections  = (flags & CG3F_NO_CORRECTIONS)     == 0;
+	applicator->ordered = (flags & CG3F_ORDERED) != 0;
+	applicator->unsafe = (flags & CG3F_UNSAFE) != 0;
+	applicator->apply_mappings = (flags & CG3F_NO_MAPPINGS) == 0;
+	applicator->apply_corrections = (flags & CG3F_NO_CORRECTIONS) == 0;
 	applicator->no_before_sections = (flags & CG3F_NO_BEFORE_SECTIONS) != 0;
-	applicator->no_sections        = (flags & CG3F_NO_SECTIONS)        != 0;
-	applicator->no_after_sections  = (flags & CG3F_NO_AFTER_SECTIONS)  != 0;
-	applicator->trace              = (flags & CG3F_TRACE)              != 0;
-	applicator->section_max_count  = (flags & CG3F_SINGLE_RUN)         != 0;
-	applicator->always_span        = (flags & CG3F_ALWAYS_SPAN)        != 0;
-	applicator->dep_block_loops    = (flags & CG3F_DEP_ALLOW_LOOPS)    == 0;
-	applicator->dep_block_crossing = (flags & CG3F_DEP_NO_CROSSING)    != 0;
-	applicator->no_pass_origin     = (flags & CG3F_NO_PASS_ORIGIN)     != 0;
+	applicator->no_sections = (flags & CG3F_NO_SECTIONS) != 0;
+	applicator->no_after_sections = (flags & CG3F_NO_AFTER_SECTIONS) != 0;
+	applicator->trace = (flags & CG3F_TRACE) != 0;
+	applicator->section_max_count = (flags & CG3F_SINGLE_RUN) != 0;
+	applicator->always_span = (flags & CG3F_ALWAYS_SPAN) != 0;
+	applicator->dep_block_loops = (flags & CG3F_DEP_ALLOW_LOOPS) == 0;
+	applicator->dep_block_crossing = (flags & CG3F_DEP_NO_CROSSING) != 0;
+	applicator->no_pass_origin = (flags & CG3F_NO_PASS_ORIGIN) != 0;
 }
 
 void cg3_applicator_setoption(cg3_applicator *applicator_, cg3_option option, void *value_) {
@@ -156,7 +156,7 @@ void cg3_applicator_setoption(cg3_applicator *applicator_, cg3_option option, vo
 	switch (option) {
 	case CG3O_SECTIONS: {
 		uint32_t *value = static_cast<uint32_t*>(value_);
-		for (uint32_t i=1 ; i<=*value ; ++i) {
+		for (uint32_t i = 1; i <= *value; ++i) {
 			applicator->sections.push_back(i);
 		}
 		break;
@@ -183,7 +183,9 @@ cg3_sentence *cg3_sentence_new(cg3_applicator *applicator_) {
 	return current;
 }
 
-#pragma GCC visibility push(hidden)
+#ifndef _MSC_VER
+	#pragma GCC visibility push(hidden)
+#endif
 inline Tag *_tag_copy(GrammarApplicator *to, Tag *t) {
 	Tag *nt = to->addTag(t->tag);
 	return nt;
@@ -195,7 +197,7 @@ inline Tag *_tag_copy(GrammarApplicator *from, GrammarApplicator *to, uint32_t h
 }
 
 inline Reading *_reading_copy(Cohort *nc, Reading *oldr, bool is_sub = false) {
-	Reading *nr = new Reading(nc);
+	Reading *nr = alloc_reading(nc);
 	GrammarApplicator *ga = nc->parent->parent->parent;
 	insert_if_exists(nr->parent->possible_sets, ga->grammar->sets_any);
 	ga->addTagToReading(*nr, nc->wordform);
@@ -219,7 +221,7 @@ inline Reading *_reading_copy(Cohort *nc, Reading *oldr, bool is_sub = false) {
 }
 
 inline Cohort *_cohort_copy(SingleWindow *ns, Cohort *oc) {
-	Cohort *nc = new Cohort(ns);
+	Cohort *nc = alloc_cohort(ns);
 	nc->wordform = _tag_copy(ns->parent->parent, oc->wordform);
 	boost_foreach (Reading *r, oc->readings) {
 		Reading *nr = _reading_copy(nc, r);
@@ -227,7 +229,9 @@ inline Cohort *_cohort_copy(SingleWindow *ns, Cohort *oc) {
 	}
 	return nc;
 }
-#pragma GCC visibility pop
+#ifndef _MSC_VER
+	#pragma GCC visibility pop
+#endif
 
 cg3_sentence *cg3_sentence_copy(cg3_sentence *sentence_, cg3_applicator *applicator_) {
 	GrammarApplicator *applicator = static_cast<GrammarApplicator*>(applicator_);
@@ -275,7 +279,7 @@ void cg3_sentence_addcohort(cg3_sentence *sentence_, cg3_cohort *cohort_) {
 
 cg3_cohort *cg3_cohort_create(cg3_sentence *sentence_) {
 	SingleWindow *sentence = static_cast<SingleWindow*>(sentence_);
-	Cohort *cohort = new Cohort(sentence);
+	Cohort *cohort = alloc_cohort(sentence);
 	cohort->global_number = sentence->parent->cohort_counter++;
 	return cohort;
 }
@@ -319,8 +323,8 @@ void cg3_cohort_getrelation_u(cg3_cohort *cohort_, const UChar *rel, uint32_t *r
 	GrammarApplicator *ga = cohort->parent->parent->parent;
 
 	if ((cohort->type & CT_RELATED) && !cohort->relations.empty()) {
-		foreach (RelationCtn, cohort->relations, miter, miter_end) {
-			foreach (uint32Set, miter->second, siter, siter_end) {
+		foreach (miter, cohort->relations) {
+			foreach (siter, miter->second) {
 				if (u_strcmp(ga->single_tags.find(miter->first)->second->tag.c_str(), rel) == 0) {
 					*rel_parent = *siter;
 				}
@@ -365,7 +369,7 @@ void cg3_cohort_free(cg3_cohort *cohort_) {
 cg3_reading *cg3_reading_create(cg3_cohort *cohort_) {
 	Cohort *cohort = static_cast<Cohort*>(cohort_);
 	GrammarApplicator *ga = cohort->parent->parent->parent;
-	Reading *reading = new Reading(cohort);
+	Reading *reading = alloc_reading(cohort);
 	insert_if_exists(reading->parent->possible_sets, ga->grammar->sets_any);
 	ga->addTagToReading(*reading, cohort->wordform);
 	return reading;
@@ -454,7 +458,7 @@ cg3_tag *cg3_tag_create_u(cg3_applicator *applicator_, const UChar *text) {
 cg3_tag *cg3_tag_create_u8(cg3_applicator *applicator, const char *text) {
 	UErrorCode status = U_ZERO_ERROR;
 
-	u_strFromUTF8(&gbuffers[0][0], CG3_BUFFER_SIZE-1, 0, text, strlen(text), &status);
+	u_strFromUTF8(&gbuffers[0][0], CG3_BUFFER_SIZE - 1, 0, text, strlen(text), &status);
 	if (U_FAILURE(status)) {
 		u_fprintf(ux_stderr, "CG3 Error: Failed to convert text from UTF-8 to UTF-16. Status = %s\n", u_errorName(status));
 		return 0;
@@ -475,7 +479,7 @@ cg3_tag *cg3_tag_create_u32(cg3_applicator *applicator, const uint32_t *text) {
 		++length;
 	}
 
-	u_strFromUTF32(&gbuffers[0][0], CG3_BUFFER_SIZE-1, 0, reinterpret_cast<const UChar32*>(text), length, &status);
+	u_strFromUTF32(&gbuffers[0][0], CG3_BUFFER_SIZE - 1, 0, reinterpret_cast<const UChar32*>(text), length, &status);
 	if (U_FAILURE(status)) {
 		u_fprintf(ux_stderr, "CG3 Error: Failed to convert text from UTF-32 to UTF-16. Status = %s\n", u_errorName(status));
 		return 0;
@@ -487,7 +491,7 @@ cg3_tag *cg3_tag_create_u32(cg3_applicator *applicator, const uint32_t *text) {
 cg3_tag *cg3_tag_create_w(cg3_applicator *applicator, const wchar_t *text) {
 	UErrorCode status = U_ZERO_ERROR;
 
-	u_strFromWCS(&gbuffers[0][0], CG3_BUFFER_SIZE-1, 0, text, wcslen(text), &status);
+	u_strFromWCS(&gbuffers[0][0], CG3_BUFFER_SIZE - 1, 0, text, wcslen(text), &status);
 	if (U_FAILURE(status)) {
 		u_fprintf(ux_stderr, "CG3 Error: Failed to convert text from wchar_t to UTF-16. Status = %s\n", u_errorName(status));
 		return 0;
@@ -505,7 +509,7 @@ const char *cg3_tag_gettext_u8(cg3_tag *tag_) {
 	Tag *tag = static_cast<Tag*>(tag_);
 	UErrorCode status = U_ZERO_ERROR;
 
-	u_strToUTF8(&cbuffers[0][0], CG3_BUFFER_SIZE-1, 0, tag->tag.c_str(), tag->tag.length(), &status);
+	u_strToUTF8(&cbuffers[0][0], CG3_BUFFER_SIZE - 1, 0, tag->tag.c_str(), tag->tag.length(), &status);
 	if (U_FAILURE(status)) {
 		u_fprintf(ux_stderr, "CG3 Error: Failed to convert text from UChar to UTF-8. Status = %s\n", u_errorName(status));
 		return 0;
@@ -525,7 +529,7 @@ const uint32_t *cg3_tag_gettext_u32(cg3_tag *tag_) {
 
 	UChar32 *tmp = reinterpret_cast<UChar32*>(&cbuffers[0][0]);
 
-	u_strToUTF32(tmp, (CG3_BUFFER_SIZE/sizeof(UChar32))-1, 0, tag->tag.c_str(), tag->tag.length(), &status);
+	u_strToUTF32(tmp, (CG3_BUFFER_SIZE / sizeof(UChar32)) - 1, 0, tag->tag.c_str(), tag->tag.length(), &status);
 	if (U_FAILURE(status)) {
 		u_fprintf(ux_stderr, "CG3 Error: Failed to convert text from UChar to UTF-32. Status = %s\n", u_errorName(status));
 		return 0;
@@ -540,7 +544,7 @@ const wchar_t *cg3_tag_gettext_w(cg3_tag *tag_) {
 
 	wchar_t *tmp = reinterpret_cast<wchar_t*>(&cbuffers[0][0]);
 
-	u_strToWCS(tmp, (CG3_BUFFER_SIZE/sizeof(wchar_t))-1, 0, tag->tag.c_str(), tag->tag.length(), &status);
+	u_strToWCS(tmp, (CG3_BUFFER_SIZE / sizeof(wchar_t)) - 1, 0, tag->tag.c_str(), tag->tag.length(), &status);
 	if (U_FAILURE(status)) {
 		u_fprintf(ux_stderr, "CG3 Error: Failed to convert text from UChar to UTF-32. Status = %s\n", u_errorName(status));
 		return 0;

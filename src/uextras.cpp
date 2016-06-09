@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2014, GrammarSoft ApS
+* Copyright (C) 2007-2016, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -19,7 +19,7 @@
 * along with VISL CG-3.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifdef _MSC_VER
+#ifdef _WIN32
 	#include <windows.h>
 #endif
 
@@ -29,8 +29,8 @@
 namespace CG3 {
 
 std::string ux_dirname(const char *in) {
-	char tmp[32768] = {0};
-#ifdef _MSC_VER
+	char tmp[32768] = { 0 };
+#ifdef _WIN32
 	char *fname = 0;
 	GetFullPathNameA(in, 32767, tmp, &fname);
 	if (fname) {
@@ -44,11 +44,10 @@ std::string ux_dirname(const char *in) {
 	}
 #endif
 	size_t tlen = strlen(tmp);
-	if (tmp[tlen-1] != '/' && tmp[tlen-1] != '\\') {
-		tmp[tlen+1] = 0;
+	if (tmp[tlen - 1] != '/' && tmp[tlen - 1] != '\\') {
+		tmp[tlen + 1] = 0;
 		tmp[tlen] = '/';
 	}
 	return tmp;
 }
-
 }

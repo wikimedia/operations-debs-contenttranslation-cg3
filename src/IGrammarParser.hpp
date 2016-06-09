@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2014, GrammarSoft ApS
+* Copyright (C) 2007-2016, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -26,18 +26,21 @@
 #include "stdafx.hpp"
 
 namespace CG3 {
-	class Grammar;
+class Grammar;
 
-	class IGrammarParser {
-	public:
-		virtual ~IGrammarParser() {};
-		virtual void setCompatible(bool compat) = 0;
-		virtual void setVerbosity(uint32_t level) = 0;
-		virtual int parse_grammar_from_file(const char *filename, const char *locale, const char *codepage) = 0;
-	protected:
-		UFILE *ux_stderr;
-		Grammar *result;
-	};
+class IGrammarParser {
+public:
+	virtual ~IGrammarParser(){};
+	virtual void setCompatible(bool compat) = 0;
+	virtual void setVerbosity(uint32_t level) = 0;
+	virtual int parse_grammar_from_file(const char *filename, const char *locale, const char *codepage) = 0;
+
+	UFILE *ux_stderr;
+
+protected:
+	Grammar *result;
+	uint32_t verbosity;
+};
 }
 
 #endif

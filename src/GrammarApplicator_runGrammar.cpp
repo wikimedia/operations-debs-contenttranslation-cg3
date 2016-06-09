@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2014, GrammarSoft ApS
+* Copyright (C) 2007-2016, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -30,11 +30,11 @@
 namespace CG3 {
 
 void GrammarApplicator::initEmptySingleWindow(SingleWindow *cSWindow) {
-	Cohort *cCohort = new Cohort(cSWindow);
+	Cohort *cCohort = alloc_cohort(cSWindow);
 	cCohort->global_number = 0;
 	cCohort->wordform = tag_begin;
 
-	Reading *cReading = new Reading(cCohort);
+	Reading *cReading = alloc_reading(cCohort);
 	cReading->baseform = begintag;
 	insert_if_exists(cReading->parent->possible_sets, grammar->sets_any);
 	addTagToReading(*cReading, begintag);
@@ -45,7 +45,7 @@ void GrammarApplicator::initEmptySingleWindow(SingleWindow *cSWindow) {
 }
 
 Reading *GrammarApplicator::initEmptyCohort(Cohort& cCohort) {
-	Reading *cReading = new Reading(&cCohort);
+	Reading *cReading = alloc_reading(&cCohort);
 	if (allow_magic_readings) {
 		cReading->baseform = makeBaseFromWord(cCohort.wordform)->hash;
 	}
@@ -94,7 +94,7 @@ void GrammarApplicator::runGrammarOnText(istream& input, UFILE *output) {
 
 	index();
 
-	uint32_t resetAfter = ((num_windows+4)*2+1);
+	uint32_t resetAfter = ((num_windows + 4) * 2 + 1);
 	uint32_t lines = 0;
 
 	SingleWindow *cSWindow = 0;
@@ -113,16 +113,16 @@ void GrammarApplicator::runGrammarOnText(istream& input, UFILE *output) {
 	uint32FlatHashSet variables_rem;
 	uint32SortedVector variables_output;
 
-	std::vector<std::pair<size_t,Reading*> > indents;
+	std::vector<std::pair<size_t, Reading*> > indents;
 	all_mappings_t all_mappings;
 
 	while (!input.eof()) {
 		++lines;
 		size_t offset = 0, packoff = 0;
 		// Read as much of the next line as will fit in the current buffer
-		while (input.gets(&line[offset], line.size()-offset-1)) {
+		while (input.gets(&line[offset], line.size() - offset - 1)) {
 			// Copy the segment just read to cleaned
-			for (size_t i=offset ; i<line.size() ; ++i) {
+			for (size_t i = offset; i < line.size(); ++i) {
 				// Only copy one space character, regardless of how many are in input
 				if (ISSPACE(line[i]) && !ISNL(line[i])) {
 					cleaned[packoff++] = ' ';
@@ -132,25 +132,25 @@ void GrammarApplicator::runGrammarOnText(istream& input, UFILE *output) {
 				}
 				// Break if there is a newline
 				if (ISNL(line[i])) {
-					cleaned[packoff+1] = cleaned[packoff] = 0;
+					cleaned[packoff + 1] = cleaned[packoff] = 0;
 					goto gotaline; // Oh how I wish C++ had break 2;
 				}
 				if (line[i] == 0) {
-					cleaned[packoff+1] = cleaned[packoff] = 0;
+					cleaned[packoff + 1] = cleaned[packoff] = 0;
 					break;
 				}
 				cleaned[packoff++] = line[i];
 			}
 			// If we reached this, buffer wasn't big enough. Double the size of the buffer and try again.
-			offset = line.size()-2;
-			line.resize(line.size()*2, 0);
-			cleaned.resize(line.size()+1, 0);
+			offset = line.size() - 2;
+			line.resize(line.size() * 2, 0);
+			cleaned.resize(line.size() + 1, 0);
 		}
 
-gotaline:
+	gotaline:
 		// Trim trailing whitespace
-		while (cleaned[0] && ISSPACE(cleaned[packoff-1])) {
-			cleaned[packoff-1] = 0;
+		while (cleaned[0] && ISSPACE(cleaned[packoff - 1])) {
+			cleaned[packoff - 1] = 0;
 			--packoff;
 		}
 		if (!ignoreinput && cleaned[0] == '"' && cleaned[1] == '<') {
@@ -158,6 +158,10 @@ gotaline:
 			if (space[0] == '"' && space[1] == '<') {
 				++space;
 				SKIPTO_NOSPAN(space, '"');
+				while (*space && space[-1] != '>') {
+					++space;
+					SKIPTO_NOSPAN(space, '"');
+				}
 				SKIPTOWS(space, 0, true, true);
 				--space;
 			}
@@ -173,8 +177,8 @@ gotaline:
 			}
 			if (cSWindow && cSWindow->cohorts.size() >= soft_limit && grammar->soft_delimiters && !did_soft_lookback) {
 				did_soft_lookback = true;
-				reverse_foreach (CohortVector, cSWindow->cohorts, iter, iter_end) {
-					if (doesSetMatchCohortNormal(**iter, grammar->soft_delimiters->hash)) {
+				reverse_foreach (iter, cSWindow->cohorts) {
+					if (doesSetMatchCohortNormal(**iter, grammar->soft_delimiters->number)) {
 						did_soft_lookback = false;
 						Cohort *cohort = delimitAt(*cSWindow, *iter);
 						cSWindow = cohort->parent->next;
@@ -189,12 +193,12 @@ gotaline:
 					}
 				}
 			}
-			if (cCohort && cSWindow->cohorts.size() >= soft_limit && grammar->soft_delimiters && doesSetMatchCohortNormal(*cCohort, grammar->soft_delimiters->hash)) {
+			if (cCohort && cSWindow->cohorts.size() >= soft_limit && grammar->soft_delimiters && doesSetMatchCohortNormal(*cCohort, grammar->soft_delimiters->number)) {
 				if (verbosity_level > 0) {
 					u_fprintf(ux_stderr, "Warning: Soft limit of %u cohorts reached at line %u but found suitable soft delimiter.\n", soft_limit, numLines);
 					u_fflush(ux_stderr);
 				}
-				foreach (ReadingList, cCohort->readings, iter, iter_end) {
+				foreach (iter, cCohort->readings) {
 					addTagToReading(**iter, endtag);
 				}
 
@@ -206,12 +210,12 @@ gotaline:
 				numCohorts++;
 				did_soft_lookback = false;
 			}
-			if (cCohort && (cSWindow->cohorts.size() >= hard_limit || (!dep_delimit && grammar->delimiters && doesSetMatchCohortNormal(*cCohort, grammar->delimiters->hash)))) {
-				if (cSWindow->cohorts.size() >= hard_limit) {
+			if (cCohort && (cSWindow->cohorts.size() >= hard_limit || (!dep_delimit && grammar->delimiters && doesSetMatchCohortNormal(*cCohort, grammar->delimiters->number)))) {
+				if (!is_conv && cSWindow->cohorts.size() >= hard_limit) {
 					u_fprintf(ux_stderr, "Warning: Hard limit of %u cohorts reached at line %u - forcing break.\n", hard_limit, numLines);
 					u_fflush(ux_stderr);
 				}
-				foreach (ReadingList, cCohort->readings, iter, iter_end) {
+				foreach (iter, cCohort->readings) {
 					addTagToReading(**iter, endtag);
 				}
 
@@ -248,8 +252,8 @@ gotaline:
 				while (!gWindow->previous.empty() && gWindow->previous.size() > num_windows) {
 					SingleWindow *tmp = gWindow->previous.front();
 					printSingleWindow(tmp, output);
-					delete tmp;
-					gWindow->previous.pop_front();
+					free_swindow(tmp);
+					gWindow->previous.erase(gWindow->previous.begin());
 				}
 				gWindow->shuffleWindowsDown();
 				runGrammarOnWindow();
@@ -261,7 +265,7 @@ gotaline:
 					u_fflush(ux_stderr);
 				}
 			}
-			cCohort = new Cohort(cSWindow);
+			cCohort = alloc_cohort(cSWindow);
 			cCohort->global_number = gWindow->cohort_counter++;
 			cCohort->wordform = addTag(&cleaned[0]);
 			lCohort = cCohort;
@@ -271,7 +275,7 @@ gotaline:
 
 			space += 2;
 			if (space[0]) {
-				cCohort->wread.reset(new Reading(cCohort));
+				cCohort->wread = alloc_reading(cCohort);
 				addTagToReading(*cCohort->wread, cCohort->wordform);
 				while (space[0]) {
 					SKIPWS(space, 0, 0, true);
@@ -308,7 +312,7 @@ gotaline:
 				indents.back().second->next = cReading;
 			}
 			else {
-				cReading = new Reading(cCohort);
+				cReading = alloc_reading(cCohort);
 			}
 			insert_if_exists(cReading->parent->possible_sets, grammar->sets_any);
 			addTagToReading(*cReading, cCohort->wordform);
@@ -381,7 +385,7 @@ gotaline:
 				}
 				cCohort->readings.back()->rehash();
 			}
-			indents.push_back(std::make_pair(indent,cReading));
+			indents.push_back(std::make_pair(indent, cReading));
 			numReadings++;
 
 			// Check whether the cohort still belongs to the window, as per --dep-delimit
@@ -389,6 +393,10 @@ gotaline:
 				reflowDependencyWindow(cCohort->global_number);
 				gWindow->dep_map.clear();
 				gWindow->dep_window.clear();
+
+				foreach (iter, cSWindow->cohorts.back()->readings) {
+					addTagToReading(**iter, endtag);
+				}
 
 				cSWindow = gWindow->allocAppendSingleWindow();
 				initEmptySingleWindow(cSWindow);
@@ -403,6 +411,14 @@ gotaline:
 				lSWindow = cSWindow;
 				++numWindows;
 				did_soft_lookback = false;
+
+				if (grammar->has_bag_of_tags) {
+					// This is slow and not 100% correct as it doesn't remove the tags from the previous window
+					cCohort->parent = cSWindow;
+					foreach (rit, cCohort->readings) {
+						reflowReading(**rit);
+					}
+				}
 			}
 		}
 		else {
@@ -412,7 +428,7 @@ gotaline:
 					u_fflush(ux_stderr);
 				}
 			}
-istext:
+		istext:
 			if (cleaned[0]) {
 				if (u_strcmp(&cleaned[0], stringbits[S_CMD_FLUSH].getTerminatedBuffer()) == 0) {
 					u_fprintf(ux_stderr, "Info: FLUSH encountered on line %u. Flushing...\n", numLines);
@@ -422,7 +438,7 @@ istext:
 						if (cCohort->readings.empty()) {
 							initEmptyCohort(*cCohort);
 						}
-						foreach (ReadingList, cCohort->readings, iter, iter_end) {
+						foreach (iter, cCohort->readings) {
 							addTagToReading(**iter, endtag);
 						}
 						cReading = lReading = 0;
@@ -433,8 +449,8 @@ istext:
 						while (!gWindow->previous.empty() && gWindow->previous.size() > num_windows) {
 							SingleWindow *tmp = gWindow->previous.front();
 							printSingleWindow(tmp, output);
-							delete tmp;
-							gWindow->previous.pop_front();
+							free_swindow(tmp);
+							gWindow->previous.erase(gWindow->previous.begin());
 						}
 						gWindow->shuffleWindowsDown();
 						runGrammarOnWindow();
@@ -450,8 +466,8 @@ istext:
 					while (!gWindow->previous.empty()) {
 						SingleWindow *tmp = gWindow->previous.front();
 						printSingleWindow(tmp, output);
-						delete tmp;
-						gWindow->previous.pop_front();
+						free_swindow(tmp);
+						gWindow->previous.erase(gWindow->previous.begin());
 					}
 					u_fprintf(output, "%S", &line[0]);
 					line[0] = 0;
@@ -476,7 +492,7 @@ istext:
 				}
 				else if (u_strncmp(&cleaned[0], stringbits[S_CMD_SETVAR].getTerminatedBuffer(), stringbits[S_CMD_SETVAR].length()) == 0) {
 					//u_fprintf(ux_stderr, "Info: SETVAR encountered on line %u.\n", numLines);
-					cleaned[packoff-1] = 0;
+					cleaned[packoff - 1] = 0;
 					line[0] = 0;
 
 					UChar *s = &cleaned[stringbits[S_CMD_SETVAR].length()];
@@ -487,6 +503,9 @@ istext:
 						variables_set[tag->hash] = grammar->tag_any;
 						variables_rem.erase(tag->hash);
 						variables_output.insert(tag->hash);
+						if (cSWindow == 0) {
+							variables[tag->hash] = grammar->tag_any;
+						}
 					}
 					else {
 						uint32_t a = 0, b = 0;
@@ -502,14 +521,14 @@ istext:
 								}
 								if (c) {
 									c[0] = 0;
-									s = c+1;
+									s = c + 1;
 								}
 								if (!d[1]) {
 									u_fprintf(ux_stderr, "Warning: SETVAR on line %u had no value after the =! Defaulting to value *.\n", numLines);
 									b = grammar->tag_any;
 								}
 								else {
-									b = addTag(d+1)->hash;
+									b = addTag(d + 1)->hash;
 								}
 								if (!c) {
 									d = 0;
@@ -528,7 +547,7 @@ istext:
 								else {
 									a = addTag(s)->hash;
 								}
-								s = c+1;
+								s = c + 1;
 								variables_set[a] = grammar->tag_any;
 								variables_rem.erase(a);
 								variables_output.insert(a);
@@ -549,7 +568,7 @@ istext:
 				}
 				else if (u_strncmp(&cleaned[0], stringbits[S_CMD_REMVAR].getTerminatedBuffer(), stringbits[S_CMD_REMVAR].length()) == 0) {
 					//u_fprintf(ux_stderr, "Info: REMVAR encountered on line %u.\n", numLines);
-					cleaned[packoff-1] = 0;
+					cleaned[packoff - 1] = 0;
 					line[0] = 0;
 
 					UChar *s = &cleaned[stringbits[S_CMD_REMVAR].length()];
@@ -563,7 +582,7 @@ istext:
 							variables_rem.insert(a);
 							variables_output.insert(a);
 						}
-						s = c+1;
+						s = c + 1;
 						c = u_strchr(s, ',');
 					}
 					if (s && s[0]) {
@@ -573,7 +592,7 @@ istext:
 						variables_output.insert(a);
 					}
 				}
-				
+
 				if (line[0]) {
 					if (lCohort) {
 						lCohort->text += &line[0];
@@ -599,7 +618,7 @@ istext:
 		if (cCohort->readings.empty()) {
 			initEmptyCohort(*cCohort);
 		}
-		foreach (ReadingList, cCohort->readings, iter, iter_end) {
+		foreach (iter, cCohort->readings) {
 			addTagToReading(**iter, endtag);
 		}
 		cReading = 0;
@@ -610,8 +629,8 @@ istext:
 		while (!gWindow->previous.empty() && gWindow->previous.size() > num_windows) {
 			SingleWindow *tmp = gWindow->previous.front();
 			printSingleWindow(tmp, output);
-			delete tmp;
-			gWindow->previous.pop_front();
+			free_swindow(tmp);
+			gWindow->previous.erase(gWindow->previous.begin());
 		}
 		gWindow->shuffleWindowsDown();
 		runGrammarOnWindow();
@@ -625,8 +644,8 @@ istext:
 	while (!gWindow->previous.empty()) {
 		SingleWindow *tmp = gWindow->previous.front();
 		printSingleWindow(tmp, output);
-		delete tmp;
-		gWindow->previous.pop_front();
+		free_swindow(tmp);
+		gWindow->previous.erase(gWindow->previous.begin());
 	}
 
 	u_fflush(output);
@@ -639,5 +658,4 @@ CGCMD_EXIT:
 		u_fflush(ux_stderr);
 	}
 }
-
 }

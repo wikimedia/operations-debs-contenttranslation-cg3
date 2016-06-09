@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2014, GrammarSoft ApS
+* Copyright (C) 2007-2016, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -34,7 +34,6 @@ namespace CG3 {
 template<typename T, T res_empty = T(-1), T res_del = T(-1) - 1>
 class flat_unordered_set {
 public:
-
 	class const_iterator : public std::iterator<std::bidirectional_iterator_tag, T> {
 	private:
 		friend class flat_unordered_set;
@@ -44,15 +43,15 @@ public:
 	public:
 		typedef T reference;
 
-		const_iterator() :
-			fus(0),
-			i(0)
+		const_iterator()
+		  : fus(0)
+		  , i(0)
 		{
 		}
 
-		const_iterator(const flat_unordered_set& fus, size_t i = 0) :
-			fus(&fus),
-			i(i)
+		const_iterator(const flat_unordered_set& fus, size_t i = 0)
+		  : fus(&fus)
+		  , i(i)
 		{
 		}
 
@@ -73,6 +72,12 @@ public:
 				i = 0;
 			}
 			return *this;
+		}
+
+		const_iterator operator++(int) {
+			const_iterator tmp(*this);
+			operator++();
+			return tmp;
 		}
 
 		const_iterator& operator--() {
@@ -109,32 +114,43 @@ public:
 	typedef T value_type;
 	typedef T key_type;
 	enum {
-		DEFAULT_CAP = static_cast<size_type>(16u)
+		DEFAULT_CAP = static_cast<size_type>(16u),
 	};
 
-	flat_unordered_set() :
-		size_(0)
+	flat_unordered_set()
+	  : size_(0)
 	{
 	}
 
 	void insert(T t) {
 		assert(t != res_empty && t != res_del && "Value cannot be res_empty or res_del!");
 
-		if (size_ + 1 >= capacity() / 2) {
+		if ((size_ + 1) * 3 / 2 >= capacity() / 2) {
 			reserve(std::max(static_cast<size_type>(DEFAULT_CAP), capacity() * 2));
 		}
 		size_t max = capacity() - 1;
-		size_t spot = t & max;
-		while (elements[spot] != res_empty) {
+		size_t spot = hash_value(t) & max;
+		while (elements[spot] != res_empty && elements[spot] != t) {
 			spot = (spot + 5) & max;
 		}
-		elements[spot] = t;
-		++size_;
+		if (elements[spot] != t) {
+			elements[spot] = t;
+			++size_;
+		}
 	}
 
 	template<typename It>
 	void insert(It b, It e) {
-		for (; b != e ; ++b) {
+		size_t d = std::distance(b, e);
+		size_t c = capacity();
+		while ((size_ + d) * 3 / 2 >= c / 2) {
+			c = std::max(static_cast<size_type>(DEFAULT_CAP), c * 2);
+		}
+		if (c != capacity()) {
+			reserve(c);
+		}
+
+		for (; b != e; ++b) {
 			insert(*b);
 		}
 	}
@@ -146,18 +162,20 @@ public:
 			return;
 		}
 		size_t max = capacity() - 1;
-		size_t spot = t & max;
+		size_t spot = hash_value(t) & max;
 		while (elements[spot] != res_empty && elements[spot] != t) {
 			spot = (spot + 5) & max;
 		}
 		if (elements[spot] == t) {
 			elements[spot] = res_del;
+			--size_;
 		}
 	}
 
 	const_iterator erase(const_iterator it) {
 		elements[it.i] = res_del;
 		++it;
+		--size_;
 		return it;
 	}
 
@@ -168,7 +186,7 @@ public:
 
 		if (size_) {
 			size_t max = capacity() - 1;
-			size_t spot = t & max;
+			size_t spot = hash_value(t) & max;
 			while (elements[spot] != res_empty && elements[spot] != t) {
 				spot = (spot + 5) & max;
 			}
@@ -215,7 +233,8 @@ public:
 			return;
 		}
 
-		container vals;
+		static container vals;
+		vals.resize(0);
 		vals.reserve(size_);
 		for (size_type i = 0, ie = capacity(); i < ie; ++i) {
 			if (elements[i] != res_empty && elements[i] != res_del) {
@@ -227,8 +246,8 @@ public:
 		size_ = vals.size();
 		size_t max = capacity() - 1;
 		for (size_type i = 0, ie = vals.size(); i < ie; ++i) {
-			size_t spot = vals[i] & max;
-			while (elements[spot] != res_empty) {
+			size_t spot = hash_value(vals[i]) & max;
+			while (elements[spot] != res_empty && elements[spot] != vals[i]) {
 				spot = (spot + 5) & max;
 			}
 			elements[spot] = vals[i];
@@ -252,7 +271,7 @@ public:
 
 	void clear(size_type n = 0) {
 		size_ = elements.size();
-		elements.clear();
+		elements.resize(0);
 		elements.resize(std::max(size_, n), res_empty);
 		size_ = 0;
 	}
@@ -265,11 +284,14 @@ private:
 	size_type size_;
 	container elements;
 
+	T hash_value(T t) const {
+		return (t << 8) | ((t >> 8) & 0xFF);
+	}
+
 	friend class const_iterator;
 };
 
 typedef flat_unordered_set<uint32_t> uint32FlatHashSet;
-
 }
 
 #endif

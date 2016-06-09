@@ -4,6 +4,80 @@
 <chapter id="grammar">
   <title>Grammar</title>
 
+  <section id="reopen-mappings">
+    <title>REOPEN-MAPPINGS</title>
+    <para>
+      A list of mapping tags that ADD/MAP/REPLACE should be able to operate on even though they were present on readings
+      in the input stream.
+    </para>
+    <screen>
+      REOPEN-MAPPINGS = @a @b @c ;
+    </screen>
+  </section>
+
+  <section id="grammar-options">
+    <title>OPTIONS</title>
+    <para>
+      You can affect how the grammar should be parsed with <code>OPTIONS += ... ;</code>.
+      Currently options can only be added, hence <code>+=</code>, but removing and assignment can be implemented if needed.
+    </para>
+    <screen>
+      OPTIONS += no-inline-templates ;
+    </screen>
+
+    <section id="grammar-options-noisets">
+      <title>no-inline-sets</title>
+      <indexterm>
+        <primary>no-inline-sets</primary>
+      </indexterm>
+      <para>
+        Disallows the use of inline sets in most places. They're still allowed in places that CG-2 did not consider sets,
+        such as MAP, ADD, REPLACE, and ADDCOHORT tag lists, and in the context of a SET definition.
+        Also, the special set (*) remains valid.
+      </para>
+    </section>
+
+    <section id="grammar-options-noitmpls">
+      <title>no-inline-templates</title>
+      <indexterm>
+        <primary>no-inline-templates</primary>
+      </indexterm>
+      <para>
+        Disallows the use of inline templates in most places. They're still allowed in the context of a TEMPLATE definition.
+      </para>
+    </section>
+
+    <section id="grammar-options-strict-wforms">
+      <title>strict-wordforms</title>
+      <indexterm>
+        <primary>strict-wordforms</primary>
+      </indexterm>
+      <para>
+        Instructs STRICT-TAGS to forbid all wordform tags (<code>"&lt;…&gt;"</code>) by default.
+      </para>
+    </section>
+
+    <section id="grammar-options-strict-bforms">
+      <title>strict-baseforms</title>
+      <indexterm>
+        <primary>strict-baseforms</primary>
+      </indexterm>
+      <para>
+        Instructs STRICT-TAGS to forbid all baseform tags (<code>"…"</code>) by default.
+      </para>
+    </section>
+
+    <section id="grammar-options-strict-second">
+      <title>strict-secondary</title>
+      <indexterm>
+        <primary>strict-secondary</primary>
+      </indexterm>
+      <para>
+        Instructs STRICT-TAGS to forbid all secondary tags (<code>&lt;…&gt;</code>) by default.
+      </para>
+    </section>
+  </section>
+
   <section id="grammar-include">
     <title>INCLUDE</title>
     <para>
@@ -71,6 +145,7 @@
         SET Hubba = ThisIsASet - (ctag) ;
         SELECT ThisIsASet IF (-1 (dtag)) ;
 
+        SECTION with-name;
         LIST AnotherSet =  "&lt;youknowthedrill&gt;" ;
         MAP (@bingo) TARGET AnotherSet ;
       </screen>

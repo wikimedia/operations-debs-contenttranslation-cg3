@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2014, GrammarSoft ApS
+* Copyright (C) 2007-2016, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -29,73 +29,77 @@
 #include "flat_unordered_set.hpp"
 
 namespace CG3 {
-	class SingleWindow;
-	class Reading;
-	class Cohort;
-	typedef bc::flat_map<uint32_t,uint32SortedVector> RelationCtn;
-	typedef std::vector<Cohort*> CohortVector;
+class SingleWindow;
+class Reading;
+class Cohort;
+typedef bc::flat_map<uint32_t, uint32SortedVector> RelationCtn;
+typedef std::vector<Cohort*> CohortVector;
 
-	enum {
-		CT_ENCLOSED       = (1 <<  0),
-		CT_RELATED        = (1 <<  1),
-		CT_REMOVED        = (1 <<  2),
-		CT_NUM_CURRENT    = (1 <<  3),
-		CT_DEP_DONE       = (1 <<  4),
-	};
+enum {
+	CT_ENCLOSED    = (1 <<  0),
+	CT_RELATED     = (1 <<  1),
+	CT_REMOVED     = (1 <<  2),
+	CT_NUM_CURRENT = (1 <<  3),
+	CT_DEP_DONE    = (1 <<  4),
+};
 
-	class Cohort {
-	public:
-		uint8_t type;
-		uint32_t global_number;
-		uint32_t local_number;
-		Tag *wordform;
-		uint32_t dep_self;
-		uint32_t dep_parent;
-		uint32_t is_pleft, is_pright;
-		SingleWindow *parent;
-		UString text;
-		Cohort *prev, *next;
-		boost::scoped_ptr<Reading> wread;
-		ReadingList readings;
-		ReadingList deleted;
-		ReadingList delayed;
-		typedef bc::flat_map<uint32_t,int32_t> num_t;
-		num_t num_max, num_min;
-		uint32SortedVector dep_children;
-		uint32FlatHashSet possible_sets;
-		CohortVector enclosed;
-		CohortVector removed;
-		RelationCtn relations;
-		RelationCtn relations_input;
+// ToDo: Would love to make this a constexpr global, but that's C++11
+#define DEP_NO_PARENT std::numeric_limits<uint32_t>::max()
 
-		int32_t getMin(uint32_t key);
-		int32_t getMax(uint32_t key);
+class Cohort {
+public:
+	uint8_t type;
+	// ToDo: Get rid of global_number in favour of Cohort* relations
+	uint32_t global_number;
+	uint32_t local_number;
+	Tag *wordform;
+	uint32_t dep_self;
+	uint32_t dep_parent;
+	uint32_t is_pleft, is_pright;
+	SingleWindow *parent;
+	UString text;
+	Cohort *prev, *next;
+	Reading *wread;
+	ReadingList readings;
+	ReadingList deleted;
+	ReadingList delayed;
+	typedef bc::flat_map<uint32_t, int32_t> num_t;
+	num_t num_max, num_min;
+	uint32SortedVector dep_children;
+	boost::dynamic_bitset<> possible_sets;
+	CohortVector enclosed;
+	CohortVector removed;
+	RelationCtn relations;
+	RelationCtn relations_input;
 
-		void detach();
+	int32_t getMin(uint32_t key);
+	int32_t getMax(uint32_t key);
 
-		Cohort(SingleWindow *p);
-		~Cohort();
+	void detach();
 
-		void addChild(uint32_t child);
-		void remChild(uint32_t child);
-		void appendReading(Reading *read);
-		Reading *allocateAppendReading();
-		bool addRelation(uint32_t rel, uint32_t cohort);
-		bool setRelation(uint32_t rel, uint32_t cohort);
-		bool remRelation(uint32_t rel, uint32_t cohort);
+	Cohort(SingleWindow *p);
+	~Cohort();
+	void clear();
 
-	private:
-		void updateMinMax();
-	};
+	void addChild(uint32_t child);
+	void remChild(uint32_t child);
+	void appendReading(Reading *read);
+	Reading *allocateAppendReading();
+	bool addRelation(uint32_t rel, uint32_t cohort);
+	bool setRelation(uint32_t rel, uint32_t cohort);
+	bool remRelation(uint32_t rel, uint32_t cohort);
 
-	struct compare_Cohort {
-		inline bool operator() (const Cohort* a, const Cohort* b) const {
-			return a->global_number < b->global_number;
-		}
-	};
+private:
+	void updateMinMax();
+};
 
-	typedef sorted_vector<Cohort*, compare_Cohort> CohortSet;
-	typedef stdext::hash_map<uint32_t, CohortSet> uint32ToCohortsMap;
+struct compare_Cohort;
+
+typedef sorted_vector<Cohort*, compare_Cohort> CohortSet;
+typedef stdext::hash_map<uint32_t, CohortSet> uint32ToCohortsMap;
+
+Cohort *alloc_cohort(SingleWindow *p);
+void free_cohort(Cohort *c);
 }
 
 #endif

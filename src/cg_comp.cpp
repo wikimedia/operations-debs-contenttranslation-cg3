@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2007-2014, GrammarSoft ApS
+ * Copyright (C) 2007-2016, GrammarSoft ApS
  * Developed by Tino Didriksen <mail@tinodidriksen.com>
  * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
  *
@@ -26,7 +26,9 @@
 #include "BinaryGrammar.hpp"
 #include "GrammarApplicator.hpp"
 
+#ifndef _WIN32
 #include <libgen.h>
+#endif
 
 #include "version.hpp"
 
@@ -35,7 +37,7 @@ using CG3::CG3Quit;
 void endProgram(char *name) {
 	if (name != NULL) {
 		fprintf(stdout, "VISL CG-3 Compiler version %u.%u.%u.%u\n",
-			CG3_VERSION_MAJOR, CG3_VERSION_MINOR, CG3_VERSION_PATCH, CG3_REVISION);
+		  CG3_VERSION_MAJOR, CG3_VERSION_MINOR, CG3_VERSION_PATCH, CG3_REVISION);
 		std::cout << basename(name) << ": compile a binary grammar from a text file" << std::endl;
 		std::cout << "USAGE: " << basename(name) << " grammar_file output_file" << std::endl;
 	}
@@ -98,7 +100,7 @@ int main(int argc, char *argv[]) {
 	grammar.reindex();
 
 	std::cerr << "Sections: " << grammar.sections.size() << ", Rules: " << grammar.rule_by_number.size();
-	std::cerr << ", Sets: " << grammar.sets_by_contents.size() << ", Tags: " << grammar.single_tags.size() << std::endl;
+	std::cerr << ", Sets: " << grammar.sets_list.size() << ", Tags: " << grammar.single_tags.size() << std::endl;
 
 	if (grammar.rules_any) {
 		std::cerr << grammar.rules_any->size() << " rules cannot be skipped by index." << std::endl;

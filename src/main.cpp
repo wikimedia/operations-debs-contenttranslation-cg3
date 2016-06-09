@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2014, GrammarSoft ApS
+* Copyright (C) 2007-2016, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -32,7 +32,7 @@ using namespace Options;
 using CG3::CG3Quit;
 void GAppSetOpts(CG3::GrammarApplicator& applicator, UConverter *conv);
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
 	UFILE *ux_stdin = 0;
 	UFILE *ux_stdout = 0;
 	UFILE *ux_stderr = 0;
@@ -53,9 +53,6 @@ int main(int argc, char* argv[]) {
 
 	if (options[VERSION].doesOccur || options[HELP1].doesOccur || options[HELP2].doesOccur) {
 		out = stdout;
-	}
-
-	if (options[VERBOSE].doesOccur || options[VERSION].doesOccur || options[HELP1].doesOccur || options[HELP2].doesOccur) {
 		// Keep the invocation vislcg3 --version | grep -Eo '[0-9]+$' holy so that it only outputs the revision regardless of other flags.
 		fprintf(out, "VISL CG-3 Disambiguator version %u.%u.%u.%u\n", CG3_VERSION_MAJOR, CG3_VERSION_MINOR, CG3_VERSION_PATCH, CG3_REVISION);
 	}
@@ -81,13 +78,13 @@ int main(int argc, char* argv[]) {
 		fprintf(out, "Options:\n");
 
 		size_t longest = 0;
-		for (uint32_t i=0 ; i<NUM_OPTIONS ; i++) {
+		for (uint32_t i = 0; i < NUM_OPTIONS; i++) {
 			if (options[i].description) {
 				size_t len = strlen(options[i].longName);
 				longest = std::max(longest, len);
 			}
 		}
-		for (uint32_t i=0 ; i<NUM_OPTIONS ; i++) {
+		for (uint32_t i = 0; i < NUM_OPTIONS; i++) {
 			if (options[i].description) {
 				fprintf(out, " ");
 				if (options[i].shortName) {
@@ -109,9 +106,10 @@ int main(int argc, char* argv[]) {
 		return argc < 0 ? U_ILLEGAL_ARGUMENT_ERROR : U_ZERO_ERROR;
 	}
 
+	fflush(out);
 	fflush(stderr);
 
-	if (options[SHOW_UNUSED_SETS].doesOccur || options[SHOW_SET_HASHES].doesOccur) {
+	if (options[SHOW_UNUSED_SETS].doesOccur || options[SHOW_SET_HASHES].doesOccur || options[DUMP_AST].doesOccur) {
 		options[GRAMMAR_ONLY].doesOccur = true;
 	}
 
@@ -119,6 +117,13 @@ int main(int argc, char* argv[]) {
 		if (!options[VERBOSE].doesOccur) {
 			options[VERBOSE].doesOccur = true;
 		}
+	}
+
+	if (options[QUIET].doesOccur) {
+		options[VERBOSE].doesOccur = false;
+	}
+	if (options[VERBOSE].doesOccur && options[VERBOSE].value && strcmp(options[VERBOSE].value, "0") == 0) {
+		options[VERBOSE].doesOccur = false;
 	}
 
 	/* Initialize ICU */
@@ -133,8 +138,8 @@ int main(int argc, char* argv[]) {
 	ucnv_setDefaultName("UTF-8");
 	const char *codepage_default = ucnv_getDefaultName();
 	const char *codepage_grammar = codepage_default;
-	const char *codepage_input   = codepage_grammar;
-	const char *codepage_output  = codepage_grammar;
+	const char *codepage_input = codepage_grammar;
+	const char *codepage_output = codepage_grammar;
 
 	if (options[CODEPAGE_GRAMMAR].doesOccur) {
 		codepage_grammar = options[CODEPAGE_GRAMMAR].value;
@@ -230,10 +235,14 @@ int main(int argc, char* argv[]) {
 		if (options[VERBOSE].doesOccur) {
 			std::cerr << "Info: Binary grammar detected." << std::endl;
 		}
+		if (options[DUMP_AST].doesOccur) {
+			std::cerr << "Error: --dump-ast is for textual grammars only!" << std::endl;
+			CG3Quit(1);
+		}
 		parser = new CG3::BinaryGrammar(grammar, ux_stderr);
 	}
 	else {
-		parser = new CG3::TextualParser(grammar, ux_stderr);
+		parser = new CG3::TextualParser(grammar, ux_stderr, options[DUMP_AST].doesOccur != 0);
 	}
 	if (options[VERBOSE].doesOccur) {
 		if (options[VERBOSE].value) {
@@ -251,7 +260,7 @@ int main(int argc, char* argv[]) {
 	parser->setCompatible(options[VISLCGCOMPAT].doesOccur != 0);
 
 	if (options[VERBOSE].doesOccur) {
-		std::cerr << "Initialization took " << (clock()-main_timer)/(double)CLOCKS_PER_SEC << " seconds." << std::endl;
+		std::cerr << "Initialization took " << (clock() - main_timer) / (double)CLOCKS_PER_SEC << " seconds." << std::endl;
 	}
 	main_timer = clock();
 
@@ -260,29 +269,37 @@ int main(int argc, char* argv[]) {
 		CG3Quit(1);
 	}
 
+	if (options[DUMP_AST].doesOccur) {
+		dynamic_cast<CG3::TextualParser*>(parser)->print_ast(ux_stdout);
+	}
+
 	if (options[MAPPING_PREFIX].doesOccur) {
 		UConverter *conv = ucnv_open(codepage_cli, &status);
 		size_t sn = strlen(options[MAPPING_PREFIX].value);
-		CG3::UString buf(sn*3, 0);
+		CG3::UString buf(sn * 3, 0);
 		ucnv_toUChars(conv, &buf[0], buf.size(), options[MAPPING_PREFIX].value, sn, &status);
+		if (grammar.is_binary && grammar.mapping_prefix != buf[0]) {
+			std::cerr << "Error: Mapping prefix must match the one used for compiling the binary grammar!" << std::endl;
+			CG3Quit(1);
+		}
 		grammar.mapping_prefix = buf[0];
 		ucnv_close(conv);
 	}
 	if (options[VERBOSE].doesOccur) {
 		std::cerr << "Reindexing grammar..." << std::endl;
 	}
-	grammar.reindex(options[SHOW_UNUSED_SETS].doesOccur == 1);
+	grammar.reindex(options[SHOW_UNUSED_SETS].doesOccur == 1, options[SHOW_TAGS].doesOccur == 1);
 
 	delete parser;
 	parser = 0;
 
 	if (options[VERBOSE].doesOccur) {
-		std::cerr << "Parsing grammar took " << (clock()-main_timer)/(double)CLOCKS_PER_SEC << " seconds." << std::endl;
+		std::cerr << "Parsing grammar took " << (clock() - main_timer) / (double)CLOCKS_PER_SEC << " seconds." << std::endl;
 	}
 	main_timer = clock();
 
 	if (options[VERBOSE].doesOccur) {
-		std::cerr << "Grammar has " << grammar.sections.size() << " sections, " << grammar.template_list.size() << " templates, " << grammar.rule_by_number.size() << " rules, " << grammar.sets_list.size() << " sets, " << grammar.single_tags.size() << " tags." << std::endl;
+		std::cerr << "Grammar has " << grammar.sections.size() << " sections, " << grammar.templates.size() << " templates, " << grammar.rule_by_number.size() << " rules, " << grammar.sets_list.size() << " sets, " << grammar.single_tags.size() << " tags." << std::endl;
 		if (grammar.rules_any) {
 			std::cerr << grammar.rules_any->size() << " rules cannot be skipped by index." << std::endl;
 		}
@@ -334,44 +351,44 @@ int main(int argc, char* argv[]) {
 		applicator.runGrammarOnText(instream, ux_stdout);
 
 		if (options[VERBOSE].doesOccur) {
-			std::cerr << "Applying grammar on input took " << (clock()-main_timer)/(double)CLOCKS_PER_SEC << " seconds." << std::endl;
+			std::cerr << "Applying grammar on input took " << (clock() - main_timer) / (double)CLOCKS_PER_SEC << " seconds." << std::endl;
 		}
 		main_timer = clock();
 	}
 
 	if (options[OPTIMIZE_UNSAFE].doesOccur) {
 		std::vector<uint32_t> bad;
-		foreach (CG3::RuleVector, grammar.rule_by_number, ir, ir_end) {
+		foreach (ir, grammar.rule_by_number) {
 			if ((*ir)->num_match == 0) {
 				bad.push_back((*ir)->number);
 			}
 		}
-		reverse_foreach (std::vector<uint32_t>, bad, br, br_end) {
+		reverse_foreach (br, bad) {
 			CG3::Rule *r = grammar.rule_by_number[*br];
-			grammar.rule_by_number.erase(grammar.rule_by_number.begin()+*br);
+			grammar.rule_by_number.erase(grammar.rule_by_number.begin() + *br);
 			grammar.destroyRule(r);
 		}
 		std::cerr << "Optimizer removed " << bad.size() << " rules." << std::endl;
 		grammar.reindex();
-		std::cerr << "Grammar has " << grammar.sections.size() << " sections, " << grammar.template_list.size() << " templates, " << grammar.rule_by_number.size() << " rules, " << grammar.sets_list.size() << " sets, " << grammar.single_tags.size() << " tags." << std::endl;
+		std::cerr << "Grammar has " << grammar.sections.size() << " sections, " << grammar.templates.size() << " templates, " << grammar.rule_by_number.size() << " rules, " << grammar.sets_list.size() << " sets, " << grammar.single_tags.size() << " tags." << std::endl;
 	}
 	if (options[OPTIMIZE_SAFE].doesOccur) {
 		CG3::RuleVector bad;
-		foreach (CG3::RuleVector, grammar.rule_by_number, ir, ir_end) {
+		foreach (ir, grammar.rule_by_number) {
 			if ((*ir)->num_match == 0) {
 				bad.push_back(*ir);
 			}
 		}
-		reverse_foreach (CG3::RuleVector, bad, br, br_end) {
+		reverse_foreach (br, bad) {
 			grammar.rule_by_number.erase(grammar.rule_by_number.begin() + (*br)->number);
 		}
-		foreach (CG3::RuleVector, bad, br, br_end) {
+		foreach (br, bad) {
 			(*br)->number = grammar.rule_by_number.size();
 			grammar.rule_by_number.push_back(*br);
 		}
 		std::cerr << "Optimizer moved " << bad.size() << " rules." << std::endl;
 		grammar.reindex();
-		std::cerr << "Grammar has " << grammar.sections.size() << " sections, " << grammar.template_list.size() << " templates, " << grammar.rule_by_number.size() << " rules, " << grammar.sets_list.size() << " sets, " << grammar.single_tags.size() << " tags." << std::endl;
+		std::cerr << "Grammar has " << grammar.sections.size() << " sections, " << grammar.templates.size() << " templates, " << grammar.rule_by_number.size() << " rules, " << grammar.sets_list.size() << " sets, " << grammar.single_tags.size() << " tags." << std::endl;
 	}
 
 	if (options[GRAMMAR_OUT].doesOccur) {
@@ -384,7 +401,7 @@ int main(int argc, char* argv[]) {
 			writer.writeGrammar(gout);
 
 			if (options[VERBOSE].doesOccur) {
-				std::cerr << "Writing textual grammar took " << (clock()-main_timer)/(double)CLOCKS_PER_SEC << " seconds." << std::endl;
+				std::cerr << "Writing textual grammar took " << (clock() - main_timer) / (double)CLOCKS_PER_SEC << " seconds." << std::endl;
 			}
 			main_timer = clock();
 		}
@@ -400,7 +417,7 @@ int main(int argc, char* argv[]) {
 			writer.writeBinaryGrammar(gout);
 
 			if (options[VERBOSE].doesOccur) {
-				std::cerr << "Writing binary grammar took " << (clock()-main_timer)/(double)CLOCKS_PER_SEC << " seconds." << std::endl;
+				std::cerr << "Writing binary grammar took " << (clock() - main_timer) / (double)CLOCKS_PER_SEC << " seconds." << std::endl;
 			}
 			main_timer = clock();
 		}
@@ -416,7 +433,7 @@ int main(int argc, char* argv[]) {
 	u_cleanup();
 
 	if (options[VERBOSE].doesOccur) {
-		std::cerr << "Cleanup took " << (clock()-main_timer)/(double)CLOCKS_PER_SEC << " seconds." << std::endl;
+		std::cerr << "Cleanup took " << (clock() - main_timer) / (double)CLOCKS_PER_SEC << " seconds." << std::endl;
 	}
 
 	return status;
@@ -498,11 +515,11 @@ void GAppSetOpts(CG3::GrammarApplicator& applicator, UConverter *conv) {
 		else {
 			UErrorCode status = U_ZERO_ERROR;
 			size_t sn = strlen(options[RULE].value);
-			UChar *buf = new UChar[sn*3];
+			UChar *buf = new UChar[sn * 3];
 			buf[0] = 0;
-			ucnv_toUChars(conv, buf, sn*3, options[RULE].value, sn, &status);
+			ucnv_toUChars(conv, buf, sn * 3, options[RULE].value, sn, &status);
 
-			const_foreach (CG3::RuleVector, applicator.grammar->rule_by_number, riter, riter_end) {
+			foreach (riter, applicator.grammar->rule_by_number) {
 				const CG3::Rule *rule = *riter;
 				if (rule->name && u_strcmp(rule->name, buf) == 0) {
 					applicator.valid_rules.push_back(rule->number);
@@ -560,6 +577,9 @@ void GAppSetOpts(CG3::GrammarApplicator& applicator, UConverter *conv) {
 	}
 	if (options[NO_PASS_ORIGIN].doesOccur) {
 		applicator.no_pass_origin = true;
+	}
+	if (options[SPLIT_MAPPINGS].doesOccur) {
+		applicator.split_mappings = true;
 	}
 	if (options[SHOW_END_TAGS].doesOccur) {
 		applicator.show_end_tags = true;

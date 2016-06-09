@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2014, GrammarSoft ApS
+* Copyright (C) 2007-2016, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -53,13 +53,13 @@ int main(int argc, char *argv[]) {
 		fprintf(out, "Options:\n");
 
 		size_t longest = 0;
-		for (uint32_t i=0 ; i<NUM_OPTIONS ; i++) {
+		for (uint32_t i = 0; i < NUM_OPTIONS; i++) {
 			if (options[i].description) {
 				size_t len = strlen(options[i].longName);
 				longest = std::max(longest, len);
 			}
 		}
-		for (uint32_t i=0 ; i<NUM_OPTIONS ; i++) {
+		for (uint32_t i = 0; i < NUM_OPTIONS; i++) {
 			if (options[i].description && options[i].description[0] != '!') {
 				fprintf(out, " ");
 				if (options[i].shortName) {
@@ -100,6 +100,7 @@ int main(int argc, char *argv[]) {
 	CG3::Grammar grammar;
 
 	grammar.ux_stderr = ux_stderr;
+	grammar.allocateDummySet();
 	grammar.delimiters = grammar.allocateSet();
 	grammar.addTagToSet(grammar.allocateTag(CG3::stringbits[0].getTerminatedBuffer()), grammar.delimiters);
 	grammar.reindex();
@@ -135,7 +136,7 @@ int main(int argc, char *argv[]) {
 		URegularExpression *rx = 0;
 
 		for (;;) {
-			rx = uregex_openC("^\"<[^>]+>\".*?^\\s+\"[^\"]+\"", UREGEX_DOTALL|UREGEX_MULTILINE, 0, &status);
+			rx = uregex_openC("^\"<[^>]+>\".*?^\\s+\"[^\"]+\"", UREGEX_DOTALL | UREGEX_MULTILINE, 0, &status);
 			uregex_setText(rx, buffer.c_str(), buffer.size(), &status);
 			if (uregex_find(rx, -1, &status)) {
 				fmt = CG3::FMT_CG;
@@ -143,7 +144,7 @@ int main(int argc, char *argv[]) {
 			}
 			uregex_close(rx);
 
-			rx = uregex_openC("^\\S+ *\t *\\[\\S+\\]", UREGEX_DOTALL|UREGEX_MULTILINE, 0, &status);
+			rx = uregex_openC("^\\S+ *\t *\\[\\S+\\]", UREGEX_DOTALL | UREGEX_MULTILINE, 0, &status);
 			uregex_setText(rx, buffer.c_str(), buffer.size(), &status);
 			if (uregex_find(rx, -1, &status)) {
 				fmt = CG3::FMT_NICELINE;
@@ -159,7 +160,7 @@ int main(int argc, char *argv[]) {
 			}
 			uregex_close(rx);
 
-			rx = uregex_openC("\\^[^/]+(/[^<]+(<[^>]+>)+)+\\$", UREGEX_DOTALL|UREGEX_MULTILINE, 0, &status);
+			rx = uregex_openC("\\^[^/]+(/[^<]+(<[^>]+>)+)+\\$", UREGEX_DOTALL | UREGEX_MULTILINE, 0, &status);
 			uregex_setText(rx, buffer.c_str(), buffer.size(), &status);
 			if (uregex_find(rx, -1, &status)) {
 				fmt = CG3::FMT_APERTIUM;
@@ -167,7 +168,7 @@ int main(int argc, char *argv[]) {
 			}
 			uregex_close(rx);
 
-			rx = uregex_openC("^\\S+\t\\S+(\\+\\S+)+$", UREGEX_DOTALL|UREGEX_MULTILINE, 0, &status);
+			rx = uregex_openC("^\\S+\t\\S+(\\+\\S+)+$", UREGEX_DOTALL | UREGEX_MULTILINE, 0, &status);
 			uregex_setText(rx, buffer.c_str(), buffer.size(), &status);
 			if (uregex_find(rx, -1, &status)) {
 				fmt = CG3::FMT_FST;
@@ -192,11 +193,31 @@ int main(int argc, char *argv[]) {
 	}
 	if (options[MAPPING_PREFIX].doesOccur) {
 		size_t sn = strlen(options[MAPPING_PREFIX].value);
-		CG3::UString buf(sn*3, 0);
+		CG3::UString buf(sn * 3, 0);
 		UConverter *conv = ucnv_open(codepage_default, &status);
 		ucnv_toUChars(conv, &buf[0], buf.size(), options[MAPPING_PREFIX].value, sn, &status);
 		ucnv_close(conv);
 		grammar.mapping_prefix = buf[0];
+	}
+	if (options[SUB_DELIMITER].doesOccur) {
+		size_t sn = strlen(options[SUB_DELIMITER].value);
+		applicator.sub_delims.resize(sn * 2);
+		UConverter *conv = ucnv_open(codepage_default, &status);
+		sn = ucnv_toUChars(conv, &applicator.sub_delims[0], applicator.sub_delims.size(), options[SUB_DELIMITER].value, sn, &status);
+		applicator.sub_delims.resize(sn);
+		applicator.sub_delims += '+';
+		ucnv_close(conv);
+	}
+	if (options[FST_WTAG].doesOccur) {
+		size_t sn = strlen(options[FST_WTAG].value);
+		applicator.wtag.resize(sn * 2);
+		UConverter *conv = ucnv_open(codepage_default, &status);
+		sn = ucnv_toUChars(conv, &applicator.wtag[0], applicator.wtag.size(), options[FST_WTAG].value, sn, &status);
+		applicator.wtag.resize(sn);
+		ucnv_close(conv);
+	}
+	if (options[FST_WFACTOR].doesOccur) {
+		applicator.wfactor = strtof(options[FST_WFACTOR].value, 0);
 	}
 
 	applicator.setOutputFormat(CG3::FMT_CG);
@@ -211,6 +232,7 @@ int main(int argc, char *argv[]) {
 		applicator.setOutputFormat(CG3::FMT_PLAIN);
 	}
 
+	applicator.is_conv = true;
 	applicator.verbosity_level = 0;
 	applicator.runGrammarOnText(*instream.get(), ux_stdout);
 

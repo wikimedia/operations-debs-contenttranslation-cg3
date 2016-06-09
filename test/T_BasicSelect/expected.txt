@@ -1,9 +1,0 @@
-"<word>"
-	"word" wanted
-"<word>"
-	"word" mapped @A @B
-"<word>"
-	"word" notwanted <<<
-	"word" mapped <<< @D @E @X
-	"word" notmeeither <<<
-

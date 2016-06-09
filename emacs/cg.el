@@ -1,9 +1,9 @@
 ;;; cg.el --- major mode for editing Constraint Grammar files
 
-;; Copyright (C) 2010-2013 Kevin Brubeck Unhammer
+;; Copyright (C) 2010-2016 Kevin Brubeck Unhammer
 
 ;; Author: Kevin Brubeck Unhammer <unhammer@fsfe.org>
-;; Version: 0.1.6
+;; Version: 0.2.0
 ;; Url: http://beta.visl.sdu.dk/constraint_grammar.html
 ;; Keywords: languages
 
@@ -32,18 +32,24 @@
 ;; ; Or if you use a non-standard file suffix, e.g. .rlx:
 ;; (add-to-list 'auto-mode-alist '("\\.rlx\\'" . cg-mode))
 
-;; I recommend using autocomplete-mode for tab-completion, and
+;; I recommend using company-mode for tab-completion, and
 ;; smartparens-mode if you're used to it (paredit-mode does not work
 ;; well if you have set names with the # character in them). Both are
 ;; available from MELPA (see http://melpa.milkbox.net/).
+;;
+;; You can lazy-load company-mode for cg-mode like this:
+;;
+;; (eval-after-load 'company-autoloads
+;;     (add-hook 'cg-mode-hook #'company-mode))
+
 
 ;; TODO:
-;; - optionally highlight any LIST/SET without ; at the end
 ;; - different syntax highlighting for sets and tags (difficult)
 ;; - use something like prolog-clause-start to define M-a/e etc.
 ;; - run vislcg3 --show-unused-sets and buttonise with line numbers (like Occur does)
 ;; - indentation function (based on prolog again?)
 ;; - the rest of the keywords
+;; - http://beta.visl.sdu.dk/cg3/single/#regex-icase
 ;; - keyword tab-completion
 ;; - the quotes-within-quotes thing plays merry hell with
 ;;   paredit-doublequote, write a new doublequote function?
@@ -51,14 +57,14 @@
 ;; - derive cg-mode from prog-mode?
 ;; - goto-set/list
 ;; - show definition of set/list-at-point in modeline
-;; - send dictionary to auto-complete
 ;; - show section name/number in modeline
 
 ;;; Code:
 
-(defconst cg-version "0.1.6" "Version of cg-mode")
+(defconst cg-version "0.2.0" "Version of cg-mode.")
 
 (eval-when-compile (require 'cl))
+(require 'cl-lib)
 
 ;;;============================================================================
 ;;;
@@ -78,7 +84,7 @@
   "The vislcg3 command, e.g. \"/usr/local/bin/vislcg3\".
 
 Buffer-local, so use `setq-default' if you want to change the
-global default value. 
+global default value.
 
 See also `cg-extra-args' and `cg-pre-pipe'."
   :type 'string)
@@ -89,7 +95,7 @@ See also `cg-extra-args' and `cg-pre-pipe'."
   "Extra arguments sent to vislcg3 when running `cg-check'.
 
 Buffer-local, so use `setq-default' if you want to change the
-global default value. 
+global default value.
 
 See also `cg-command'."
   :type 'string)
@@ -98,11 +104,10 @@ See also `cg-command'."
 
 ;;;###autoload
 (defcustom cg-pre-pipe "cg-conv"
-  "Pipeline to run before the vislcg3 command when testing a file
-with `cg-check'. 
+  "Pipeline to run before vislcg3 when testing a file with `cg-check'.
 
 Buffer-local, so use `setq-default' if you want to change the
-global default value. If you want to set it on a per-file basis,
+global default value.  If you want to set it on a per-file basis,
 put a line like
 
 # -*- cg-pre-pipe: \"lt-proc foo.bin | cg-conv\"; othervar: value; -*-
@@ -115,11 +120,10 @@ See also `cg-command' and `cg-post-pipe'."
 
 ;;;###autoload
 (defcustom cg-post-pipe ""
-  "Pipeline to run after the vislcg3 command when testing a file
-with `cg-check'. 
+  "Pipeline to run after vislcg3 when testing a file with `cg-check'.
 
 Buffer-local, so use `setq-default' if you want to change the
-global default value. If you want to set it on a per-file basis,
+global default value.  If you want to set it on a per-file basis,
 put a line like
 
 # -*- cg-post-pipe: \"cg-conv --out-apertium | lt-proc -b foo.bin\"; -*-
@@ -131,17 +135,22 @@ See also `cg-command' and `cg-pre-pipe'."
 (make-variable-buffer-local 'cg-post-pipe)
 
 (defconst cg-kw-set-list
-  '("LIST" "SET" "TEMPLATE")
-  "Used for indentation, highlighting etc.; don't change without
-re-evaluating `cg-kw-re' (or all of cg.el).")
-(defconst cg-kw-set-re (regexp-opt cg-kw-set-list))
+  '("LIST" "SET" "TEMPLATE"
+    ;; These are not sets (and don't have names after the kw) but we
+    ;; have them here to make beginning-of-defun work:
+    "MAPPING-PREFIX" "SOFT-DELIMITERS" "DELIMITERS")
+  "List-like keywords used for indentation, highlighting etc.
+Don't change without re-evaluating `cg-kw-re' (or all of cg.el).")
+(defconst cg-kw-set-re (regexp-opt cg-kw-set-list)
+  "Regexp version of `cg-kw-set-list'.")
 
 (defconst cg-kw-rule-list
   '("SUBSTITUTE"
     "IFF"
-    "ADDCOHORT" "ADDCOHORT-AFTER" "ADDCOHORT-BEFORE"
-    "REMCOHORT"
+    "ADDCOHORT" "REMCOHORT"
     "COPY"
+    "MOVE" "SWITCH"
+    "EXTERNAL" "DELIMIT"
     "MAP"    "ADD"
     "UNMAP"
     "SELECT" "REMOVE"
@@ -150,10 +159,12 @@ re-evaluating `cg-kw-re' (or all of cg.el).")
     "ADDRELATIONS" "REMRELATIONS" "SETRELATIONS"
     "SETVARIABLE"  "REMVARIABLE"
     "APPEND")
-  "Used for indentation, highlighting etc.; don't change without
-re-evaluating `cg-kw-re' (or all of cg.el)." )
-(defconst cg-kw-rule-re (regexp-opt cg-kw-rule-list))
-(defconst cg-kw-re (regexp-opt (append cg-kw-set-list cg-kw-rule-list)))
+  "Rule-starter keywords for indentation, highlighting etc.
+Don't change without re-evaluating `cg-kw-re' (or all of cg.el)." )
+(defconst cg-kw-rule-re (regexp-opt cg-kw-rule-list)
+    "Regexp version of `cg-kw-rule-list'.")
+(defconst cg-kw-re (regexp-opt (append cg-kw-set-list cg-kw-rule-list))
+  "Regexp combination of `cg-kw-rule-list' and `cg-kw-set-list'.")
 
 (defconst cg-kw-rule-flags '("NEAREST"
 			     "ALLOWLOOP"
@@ -161,7 +172,7 @@ re-evaluating `cg-kw-re' (or all of cg.el)." )
 			     "IMMEDIATE"
 			     "LOOKDELETED"
 			     "LOOKDELAYED"
-			     "UNSAFE" ; 
+			     "UNSAFE" ;
 			     "SAFE"
 			     "REMEMBERX"
 			     "RESETX"
@@ -180,9 +191,9 @@ re-evaluating `cg-kw-re' (or all of cg.el)." )
 			     "REVERSE"
 			     "SUB"
 			     "OUTPUT")
-  "Used for highlighting, from
-  http://visl.sdu.dk/svn/visl/tools/vislcg3/trunk/src/Strings.cpp
-  Don't change without re-evaluating the file.")
+  "Rule flags used for highlighting.
+from http://visl.sdu.dk/svn/visl/tools/vislcg3/trunk/src/Strings.cpp
+Don't change without re-evaluating the file.")
 (defconst cg-kw-context-flags '("NOT"
 				"NEGATE"
 				"NONE"
@@ -193,9 +204,11 @@ re-evaluating `cg-kw-re' (or all of cg.el)." )
 				"TARGET"
 				"IF"
 				"AFTER"
+				"BEFORE"
+				"WITH"
 				"TO")
-  "Used for highlighting; Don't change without re-evaluating the
-  file.")
+  "Context flags used for highlighting.
+Don't change without re-evaluating the file.")
 (defconst cg-kw-flags-re (regexp-opt (append cg-kw-rule-flags cg-kw-context-flags)))
 
 
@@ -248,6 +261,96 @@ re-evaluating `cg-kw-re' (or all of cg.el)." )
   (modify-syntax-entry ?« "." table)
                        table))
 
+(defun cg-beginning-of-defun ()
+  (re-search-backward defun-prompt-regexp nil 'noerror)
+  (while (nth 4 (syntax-ppss))
+    (re-search-backward defun-prompt-regexp nil 'noerror))
+  (re-search-backward "\"<[^\"]>\"" (line-beginning-position) 'noerror))
+
+(defun cg-end-of-defun ()
+  (and (search-forward ";")
+       (re-search-forward defun-prompt-regexp nil 'noerror)
+       (goto-char (match-beginning 0)))
+  (while (nth 4 (syntax-ppss))
+    (and (search-forward ";")
+         (re-search-forward defun-prompt-regexp nil 'noerror)
+         (goto-char (match-beginning 0))))
+  (re-search-backward "\"<[^\"]>\"" (line-beginning-position) 'noerror))
+
+(defun cg--line-commented-p ()
+  (save-excursion
+    (back-to-indentation)
+    (looking-at "#")))
+
+(defun cg--region-commented-p (beg end)
+  (catch 'ret
+    (save-excursion
+      (goto-char beg)
+      (while (and (< (point) end)
+                  (< (point) (point-max)))
+        (if (cg--line-commented-p)
+            (forward-line)
+          (throw 'ret nil)))
+      (throw 'ret t))))
+
+(defun cg--comment/uncomment-rule (comment &optional n)
+  "Comment/uncomment a rule around point."
+  (let ((i 0)
+        (n (if (numberp n) n 1))
+        (initial-point (point-marker)))
+    (while (< i n)
+      (incf i)
+      (let* ((r (save-excursion
+                  (if (search-forward ";" nil 'noerror)
+                      (1+ (point-marker))
+                    (point-max))))
+             (l (save-excursion
+                  (goto-char r)
+                  (if (re-search-backward defun-prompt-regexp nil 'noerror)
+                      (goto-char (line-beginning-position))
+                    (point-min)))))
+        ;; Only uncomment rules if they're completely commented (but
+        ;; always uncomment the first one)
+        (when (or comment
+                  (= i 1)
+                  (cg--region-commented-p l r))
+          (goto-char r)
+          (skip-chars-forward "\r\n[:blank:]")
+          (if comment
+              (comment-region l r)
+            (uncomment-region l r))
+          (skip-chars-forward "\r\n[:blank:]")))
+      (when (= n 1)
+        (goto-char initial-point)))))
+
+(defun cg-comment-rule (&optional n)
+  "Comment a rule around point.
+With a prefix argument N, comment that many rules."
+  (interactive "p")
+  (cg--comment/uncomment-rule 'comment n))
+
+(defun cg-uncomment-rule (&optional n)
+  "Uncomment a rule around point.
+With a prefix argument N, uncomment that many rules."
+  (interactive "p")
+  (cg--comment/uncomment-rule nil n))
+
+(defun cg-comment-or-uncomment-rule (&optional n)
+  "Comment the rule at point.
+If already inside (or before) a comment, uncomment instead.
+With a prefix argument N, (un)comment that many rules."
+  (interactive "p")
+  (if (or (elt (syntax-ppss) 4)
+          (< (save-excursion
+               (skip-chars-forward "\r\n[:blank:]")
+               (point))
+             (save-excursion
+               (comment-forward 1)
+               (point))))
+      (cg-uncomment-rule n)
+    (cg-comment-rule n)))
+
+
 ;;;###autoload
 (defun cg-mode ()
   "Major mode for editing Constraint Grammar files.
@@ -279,21 +382,26 @@ CG-mode provides the following specific keyboard key bindings:
   (set-syntax-table cg-mode-syntax-table)
   (set (make-local-variable 'parse-sexp-ignore-comments) t)
   (set (make-local-variable 'parse-sexp-lookup-properties) t)
+  (set (make-local-variable 'defun-prompt-regexp) (concat cg-kw-re "\\(?::[^\n\t ]+\\)[\t ]"))
+  (set (make-local-variable 'beginning-of-defun-function) #'cg-beginning-of-defun)
+  (set (make-local-variable 'end-of-defun-function) #'cg-end-of-defun)
   (setq indent-line-function #'cg-indent-line)
-  (easy-mmode-pretty-mode-name 'cg-mode " cg")
   (when font-lock-mode
     (setq font-lock-set-defaults nil)
     (font-lock-set-defaults)
+    ;; TODO: emacs 25 prefers `font-lock-ensure' and `font-lock-flush' over fontify
     (font-lock-fontify-buffer))
   (add-hook 'after-change-functions #'cg-after-change nil 'buffer-local)
-  (run-mode-hooks #'cg-mode-hook))
+  (let ((buf (current-buffer)))
+    (run-with-idle-timer 1 'repeat 'cg-output-hl buf))
+  (run-mode-hooks 'cg-mode-hook))
 
 
 (defconst cg-font-lock-syntactic-keywords
   ;; We can have ("words"with"quotes"inside"")! Quote rule: is it a ",
   ;; if yes then jump to next unescaped ". Then regardless, jump to
   ;; next whitespace, but don't cross an unescaped )
-  '(("\\(\"\\)[^\"\n]*\\(?:\"\\(?:\\\\)\\|[^) \n\t]\\)*\\)?\\(\"\\)\\(r\\(i\\)?\\)?[); \n\t]"
+  '(("\\(\"\\)[^\"\n]*\\(?:\"\\(?:\\\\)\\|[^) \n\t]\\)*\\)?\\(\"\\)[irv]\\{0,3\\}[); \n\t]"
      (1 "\"")
      (2 "\""))
     ;; A `#' begins a comment when it is unquoted and at the beginning
@@ -307,18 +415,20 @@ CG-mode provides the following specific keyboard key bindings:
     ("[( \t\n]\\(\\^\\)" 1 "'")))
 
 (defun cg-font-lock-syntactic-face-function (state)
-  "Determine which face to use when fontifying syntactically. See
-`font-lock-syntactic-face-function'.
+  "Determine which face to use when fontifying syntactically.
 
-TODO: something like
-	((= 0 (nth 0 state)) font-lock-variable-name-face)
-would be great to differentiate SETs from their members, but it
-seems this function only runs on comments and strings..."
+Argument STATE is assumed to be from `parse-partial-sexp' at the
+beginning of the region to highlight; see
+`font-lock-syntactic-face-function'."
+  ;; TODO: something like
+  ;; 	((= 0 (nth 0 state)) font-lock-variable-name-face)
+  ;; would be great to differentiate SETs from their members, but it
+  ;; seems this function only runs on comments and strings...
   (cond ((nth 3 state)
          (if
              (save-excursion
                (goto-char (nth 8 state))
-               (re-search-forward "\"[^\"\n]*\\(\"\\(\\\\)\\|[^) \n\t]\\)*\\)?\"\\(r\\(i\\)?\\)?[); \n\t]")
+               (re-search-forward "\"[^\"\n]*\\(\"\\(\\\\)\\|[^) \n\t]\\)*\\)?\"[irv]\\{0,3\\}[); \n\t]")
                (and (match-string 1)
                     (not (equal ?\\ (char-before (match-beginning 1))))
                     ;; TODO: make next-error hit these too
@@ -353,23 +463,25 @@ seems this function only runs on comments and strings..."
   (let ((origin (point))
         (old-case-fold-search case-fold-search))
     (setq case-fold-search nil)		; for re-search-backward
-    (save-excursion
-      (let ((kw-pos (progn
-                      (goto-char (1- (or (search-forward ";" (line-end-position) t)
-                                         (line-end-position))))
-                      (re-search-backward cg-kw-re nil 'noerror))))
-        (setq case-fold-search old-case-fold-search)
-        (when kw-pos
-          (let* ((kw (match-string-no-properties 0)))
-            (if (and (not (equal kw ";"))
-                     (> origin (line-end-position)))
-                cg-indentation
-              0)))))))
+    (prog1
+        (save-excursion
+          (let ((kw-pos (progn
+                          (goto-char (1- (or (search-forward ";" (line-end-position) t)
+                                             (line-end-position))))
+                          (re-search-backward (concat ";\\|" cg-kw-re) nil 'noerror))))
+            (when kw-pos
+              (let* ((kw (match-string-no-properties 0)))
+                (if (and (not (equal kw ";"))
+                         (> origin (line-end-position)))
+                    cg-indentation
+                  0)))))
+      (setq case-fold-search old-case-fold-search))))
 
 (defun cg-indent-line ()
-  "Indent the current line. Very simple indentation: lines with
-keywords from `cg-kw-list' get zero indentation, others get one
-indentation."
+  "Indent the current line.
+
+Very simple indentation: lines with keywords from `cg-kw-list'
+get zero indentation, others get one indentation."
   (interactive)
   (let ((indent (cg-calculate-indent))
         (pos (- (point-max) (point))))
@@ -390,15 +502,16 @@ indentation."
 (defvar cg--goto-history nil)
 
 (defun cg-permute (input)
-  "From http://www.emacswiki.org/emacs/StringPermutations"
-  (require 'cl)	; TODO: (require 'cl-lib) for whole file when 24.3 in distros
+  "Permute INPUT list.
+
+From http://www.emacswiki.org/emacs/StringPermutations"
   (if (null input)
       (list input)
-    (mapcan (lambda (elt)
-              (mapcan (lambda (p)
-                        (list (cons elt p)))
-                      (cg-permute (remove* elt input :count 1))))
-            input)))
+    (cl-mapcan (lambda (elt)
+                 (cl-mapcan (lambda (p)
+                              (list (cons elt p)))
+                            (cg-permute (cl-remove elt input :count 1))))
+               input)))
 
 (defun cg-read-arg (prompt history &optional default)
   (let* ((default (or default (car history)))
@@ -447,16 +560,17 @@ etc."
       (setq regexp-history tmp))))
 
 (defun cg-goto-rule (&optional input)
-  "Go to the line number of the rule described by `input', where
-`input' is the rule info from vislcg3 --trace.  E.g. if `input'
-is \"SELECT:1022:rulename\", go to the rule on line number
-1022. Interactively, use a prefix argument to paste `input'
-manually, otherwise this function uses the most recently copied
-line in the X clipboard.
+  "Go to the line number of the rule described by INPUT.
+
+INPUT is the rule info from vislcg3 --trace; e.g. if INPUT is
+\"SELECT:1022:rulename\", go to the rule on line number 1022.
+Interactively, use a prefix argument to paste INPUT manually,
+otherwise this function uses the most recently copied line in the
+X clipboard.
 
 This makes switching between the terminal and the file slightly
-faster (since double-clicking the rule info -- in Konsole at
-least -- selects the whole string \"SELECT:1022:rulename\")."
+faster (since double-clicking the rule info in most terminals will
+select the whole string \"SELECT:1022:rulename\")."
   (interactive (list (when current-prefix-arg
                        (cg-read-arg "Paste rule info from --trace here: "
                                     cg--goto-history))))
@@ -466,7 +580,7 @@ least -- selects the whole string \"SELECT:1022:rulename\")."
                           (yank)
                           (buffer-substring-no-properties (point-min)(point-max))))))
     (if (string-match
-         "\\(\\(select\\|iff\\|remove\\|map\\|addcohort\\|remcohort\\|copy\\|add\\|substitute\\):\\)?\\([0-9]+\\)"
+         "\\(\\(select\\|iff\\|remove\\|map\\|addcohort\\|remcohort\\|switch\\|copy\\|add\\|substitute\\):\\)?\\([0-9]+\\)"
          rule)
         (progn (goto-char (point-min))
 	       (forward-line (1- (string-to-number (match-string 3 rule))))
@@ -481,14 +595,18 @@ least -- selects the whole string \"SELECT:1022:rulename\")."
 (defvar cg--file nil
   "Which CG file the `cg-output-mode' (and `cg--check-cache-buffer')
 buffer corresponds to.")
+(make-variable-buffer-local 'cg--file)
 (defvar cg--tmp nil     ; TODO: could use cg--file iff buffer-modified-p
   "Which temporary file was sent in lieu of `cg--file' to
 compilation (in case the buffer of `cg--file' was not saved)")
+(make-variable-buffer-local 'cg--tmp)
 (defvar cg--cache-in nil
   "Which input buffer the `cg--check-cache-buffer' corresponds
 to.")
+(make-variable-buffer-local 'cg--cache-in)
 (defvar cg--cache-pre-pipe nil
   "Which pre-pipe the output of `cg--check-cache-buffer' had.")
+(make-variable-buffer-local 'cg--cache-pre-pipe)
 
 (unless (fboundp 'file-name-base)	; shim for 24.3 function
   (defun file-name-base (&optional filename)
@@ -560,31 +678,32 @@ from, otherwise all CG buffers share one input buffer."
 (defconst cg-output-regexp-alist
   `((,(format "%s:\\([^ \n\t:]+\\)\\(?::[^ \n\t]+\\)?" cg-kw-rule-re)
      ,#'cg-get-file 1 nil 1)
-    ("^Warning: .*?line \\([0-9]+\\)"
-     ,#'cg-get-file 1 nil 1)
-    ("^Warning: .*"
+    ("^\\([^:]*: \\)?Warning: .*?line \\([0-9]+\\).*"
+     ,#'cg-get-file 2 nil 1)
+    ("^\\([^:]*: \\)?Warning: .*"
      ,#'cg-get-file nil nil 1)
-    ("^Error: .*?line \\([0-9]+\\)"
-     ,#'cg-get-file 1 nil 2)
-    ("^Error: .*"
+    ("^\\([^:]*: \\)?Error: .*?line \\([0-9]+\\).*"
+     ,#'cg-get-file 2 nil 2)
+    ("^\\([^:]*: \\)?Error: .*"
      ,#'cg-get-file nil nil 2)
-    (".*?line \\([0-9]+\\)"		; some error messages span several lines
+    (".*?line \\([0-9]+\\).*"		; some error messages span several lines
      ,#'cg-get-file 1 nil 2))
-  "Regexp used to match vislcg3 --trace hits. See
-`compilation-error-regexp-alist'.")
+  "Regexp used to match vislcg3 --trace hits.
+See `compilation-error-regexp-alist'.")
 ;; TODO: highlight strings and @'s and #1->0's in cg-output-mode ?
 
 ;;;###autoload
 (defcustom cg-output-setup-hook nil
-  "List of hook functions run by `cg-output-process-setup' (see
-`run-hooks')."
+  "List of hook functions run by `cg-output-process-setup'.
+See `run-hooks'."
   :type 'hook)
 
 (defun cg-output-process-setup ()
-  "Runs `cg-output-setup-hook' for `cg-check'. That hook is
-useful for doing things like
+  "Run `cg-output-setup-hook' for `cg-check'.
+
+That hook is useful for doing things like
  (setenv \"PATH\" (concat \"~/local/stuff\" (getenv \"PATH\")))"
-  (run-hooks #'cg-output-setup-hook))
+  (run-hooks 'cg-output-setup-hook))
 
 (defvar cg-output-comment-face  font-lock-comment-face	;compilation-info-face
   "Face name to use for comments in cg-output.")
@@ -596,9 +715,9 @@ useful for doing things like
   "Face name to use for lemmas in cg-output.")
 
 (defvar cg-output-mapping-face 'bold
-  "Face name to use for mapping tags in cg-output")
+  "Face name to use for mapping tags in cg-output.")
 
-(defvar cg-output-mode-font-lock-keywords 
+(defvar cg-output-mode-font-lock-keywords
   '(("^;\\(?:[^:]* \\)"
      ;; hack alert! a colon in a tag will mess this up
      ;; (hardly matters much though)
@@ -684,37 +803,39 @@ runs."
     (overlay-put o 'isearch-open-invisible 'cg-output-remove-overlay)))
 
 (defun cg-output-show-all ()
-  "Undoes the effect of `cg-output-hide-analyses'."
+  "Undo the effect of `cg-output-hide-analyses'."
   (interactive)
   (setq cg--output-hiding-analyses nil)
   (remove-overlays (point-min) (point-max) 'invisible 'cg-output))
 
 (defun cg-output-hide-analyses ()
-  "Hides all analyses, turning the CG format back into input
-text (more or less). You can still isearch through the text for
-tags, REMOVE/SELECT keywords etc.
+  "Hide all analyses.
+
+This turns the CG format back into input text (more or less).
+You can still isearch through the text for tags, REMOVE/SELECT
+keywords etc.
 
 Call `cg-output-set-unhide' to set a regex which will be exempt
-from hiding. Call `cg-output-show-all' to turn off all hiding."
+from hiding.  Call `cg-output-show-all' to turn off all hiding."
   (interactive)
   (setq cg--output-hiding-analyses t)
-  (lexical-let (last)
+  (lexical-let (prev)
     (save-excursion
       (goto-char (point-min))
-      (while (re-search-forward "^\"<.*>\"$" nil 'noerror)
+      (while (re-search-forward "^\"<.*>\"" nil 'noerror)
 	(let ((line-beg (match-beginning 0))
 	      (line-end (match-end 0)))
 	  (cg-output-hide-region line-beg (+ line-beg 2)) ; "<
 	  (cg-output-hide-region (- line-end 2) line-end) ; >"
-	  (when last
-	    (if (save-excursion (re-search-backward cg-sent-tag last 'noerror))
-		(cg-output-hide-region last (- line-beg 1))	; show newline
-	      (cg-output-hide-region last line-beg))) ; hide newline too
-	  (setq last line-end)))
-      (goto-char last)
+	  (when prev
+	    (if (save-excursion (re-search-backward cg-sent-tag prev 'noerror))
+		(cg-output-hide-region prev (- line-beg 1))	; show newline
+	      (cg-output-hide-region prev line-beg))) ; hide newline too
+	  (setq prev line-end)))
+      (goto-char prev)
       (when (re-search-forward "^[^\t\"]" nil 'noerror)
-	(cg-output-hide-region last (match-beginning 0)))))
-  
+	(cg-output-hide-region prev (match-beginning 0)))))
+
   (when cg-output-unhide-regex
     (cg-output-unhide-some cg-output-unhide-regex)))
 
@@ -729,8 +850,11 @@ from hiding. Call `cg-output-show-all' to turn off all hiding."
 	    (overlays-at (match-beginning 0))))))
 
 (defun cg-output-set-unhide (needle)
-  "Set some exeption to `cg-output-hide-analyses'. This is saved
-and reused whenever `cg-output-hide-analyses' is called."
+  "Set some exeption to `cg-output-hide-analyses'.
+
+If NEEDLE is the empty string, hide all analyses.
+This is saved and reused whenever `cg-output-hide-analyses' is
+called."
   (interactive (list (cg-read-arg
 		      "Regex to unhide, or empty to hide all"
 		      cg--output-unhide-history
@@ -741,10 +865,10 @@ and reused whenever `cg-output-hide-analyses' is called."
     (setq cg--output-unhide-history (cons needle cg--output-unhide-history)))
   (cg-output-hide-analyses))
 
-;;; TODO: 
+;;; TODO:
 (defun cg-output-toggle-analyses ()
-  "Hide or show analyses from output. See
-`cg-output-hide-analyses'."
+  "Hide or show analyses from output.
+See `cg-output-hide-analyses'."
   (interactive)
   (if cg--output-hiding-analyses
       (cg-output-show-all)
@@ -773,22 +897,47 @@ buffer (so 0 is after each change)."
       cg-check-after-change-secs
       nil
       (lambda ()
-        (let ((proc (get-buffer-process (get-buffer-create (compilation-buffer-name
-                                                            "cg-output"
-                                                            'cg-output-mode
-                                                            'cg-output-buffer-name)))))
-          (unless (and proc (eq (process-status proc) 'run))
-            (with-demoted-errors (cg-check)))))))))
+        (unless (cg-output-running)
+	  (with-demoted-errors (cg-check))))))))
 
+(defun cg-output-hl (cg-buffer)
+  (when (eq (current-buffer) cg-buffer)
+    (let* ((sym (symbol-at-point))
+	   (sym-re (concat "[ \"]\\("
+			   (regexp-quote (symbol-name sym))
+			   "\\)\\([\" ]\\|$\\)")))
+      ;; TODO: make regexp-opts of the LIST definitions and search
+      ;; those as well?
+      (with-current-buffer (cg-output-buffer)
+	(when (and sym
+		   (get-buffer-window)
+		   (not (cg-output-running)))
+	  (remove-overlays (point-min) (point-max) 'face 'lazy-highlight)
+	  (goto-char (point-min))
+	  (while (re-search-forward sym-re nil 'noerror)
+	    (overlay-put (make-overlay (match-beginning 1) (match-end 1))
+			 'face 'lazy-highlight)))))))
 
+(defun cg-output-running ()
+  (let ((proc (get-buffer-process (cg-output-buffer))))
+    (and proc (eq (process-status proc) 'run))))
 
 (defun cg-output-buffer-name (mode)
   (if (equal mode "cg-output")
       (concat "*CG output for " (file-name-base cg--file) "*")
     (error "Unexpected mode %S" mode)))
 
+(defun cg-output-buffer ()
+  (let ((cg--file (if (eq major-mode 'cg-mode)
+		      (buffer-file-name)
+		    cg--file)))
+    (get-buffer-create (compilation-buffer-name
+			"cg-output"
+			'cg-output-mode
+			'cg-output-buffer-name))))
+
 (defun cg-end-process (proc &optional string)
-  "End `proc', optionally first sending in `string'."
+  "End PROC, optionally first sending in STRING."
   (when string
     (process-send-string proc string))
   (process-send-string proc "\n")
@@ -799,8 +948,8 @@ buffer (so 0 is after each change)."
 in case you haven't saved yet).
 
 If you've set `cg-pre-pipe', input will first be sent through
-that. Set your test input sentence(s) with `cg-edit-input'. If
-you want to send a whole file instead, just set `cg-pre-pipe' to
+that.  Set your test input sentence(s) with `cg-edit-input'.
+If you want to send a whole file instead, just set `cg-pre-pipe' to
 something like
 \"zcat corpus.gz | lt-proc analyser.bin | cg-conv\".
 
@@ -878,13 +1027,13 @@ Similarly, `cg-post-pipe' is run on output."
 
 (defun cg-back-to-file ()
   (interactive)
-  (bury-buffer)
-  (let* ((cg-buffer (find-buffer-visiting cg--file))
-         (cg-window (get-buffer-window cg-buffer)))
-    
-    (if cg-window
-        (select-window cg-window)
-      (pop-to-buffer cg-buffer))))
+  (let ((cg-buffer (find-buffer-visiting cg--file)))
+    (bury-buffer)
+    (let ((cg-window (get-buffer-window cg-buffer)))
+
+      (if cg-window
+	  (select-window cg-window)
+	(pop-to-buffer cg-buffer)))))
 
 
 (defun cg-back-to-file-and-check ()
@@ -907,6 +1056,9 @@ Similarly, `cg-post-pipe' is run on output."
 (define-key cg-mode-map (kbd "C-c C-c") #'cg-check)
 (define-key cg-mode-map (kbd "C-c C-i") #'cg-edit-input)
 (define-key cg-mode-map (kbd "C-c c") #'cg-toggle-check-after-change)
+(define-key cg-mode-map (kbd "C-;") #'cg-comment-or-uncomment-rule)
+(define-key cg-mode-map (kbd "M-#") #'cg-comment-or-uncomment-rule)
+
 (define-key cg-output-mode-map (kbd "C-c C-i") #'cg-back-to-file-and-edit-input)
 (define-key cg-output-mode-map (kbd "i") #'cg-back-to-file-and-edit-input)
 (define-key cg-output-mode-map (kbd "g") #'cg-back-to-file-and-check)
@@ -930,7 +1082,7 @@ Similarly, `cg-post-pipe' is run on output."
 ;; Tino Didriksen recommends this file suffix.
 
 ;;; Run hooks -----------------------------------------------------------------
-(run-hooks #'cg-load-hook)
+(run-hooks 'cg-load-hook)
 
 (provide 'cg)
 

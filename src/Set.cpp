@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2014, GrammarSoft ApS
+* Copyright (C) 2007-2016, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -25,16 +25,16 @@
 
 namespace CG3 {
 
-UFILE* Set::dump_hashes_out = 0;
+UFILE *Set::dump_hashes_out = 0;
 
-Set::Set() :
-type(0),
-line(0),
-hash(0),
-number(0),
-num_fail(0),
-num_match(0),
-total_time(0)
+Set::Set()
+  : type(0)
+  , line(0)
+  , hash(0)
+  , number(0)
+  , num_fail(0)
+  , num_match(0)
+  , total_time(0)
 {
 	// Nothing in the actual body...
 }
@@ -49,7 +49,7 @@ void Set::setName(uint32_t to) {
 	}
 	size_t n = sprintf(&cbuffers[0][0], "_G_%u_%u_", line, to);
 	name.reserve(n);
-	name.assign(&cbuffers[0][0], &cbuffers[0][0]+n);
+	name.assign(&cbuffers[0][0], &cbuffers[0][0] + n);
 }
 
 void Set::setName(const UChar *to) {
@@ -83,10 +83,10 @@ uint32_t Set::rehash() {
 	}
 	else {
 		retval = hash_value(2683, retval); // Combat hash-collisions
-		for (uint32_t i=0 ; i<sets.size() ; ++i) {
+		for (uint32_t i = 0; i < sets.size(); ++i) {
 			retval = hash_value(sets[i], retval);
 		}
-		for (uint32_t i=0 ; i<set_ops.size() ; ++i) {
+		for (uint32_t i = 0; i < set_ops.size(); ++i) {
 			retval = hash_value(set_ops[i], retval);
 		}
 	}
@@ -104,22 +104,6 @@ uint32_t Set::rehash() {
 	return retval;
 }
 
-uint8_t trie_reindex(const trie_t& trie) {
-	uint8_t type = 0;
-	boost_foreach (const trie_t::value_type& kv, trie) {
-		if (kv.first->type & T_SPECIAL) {
-			type |= ST_SPECIAL;
-		}
-		if (kv.first->type & T_MAPPING) {
-			type |= ST_MAPPING;
-		}
-		if (kv.second.trie) {
-			type |= trie_reindex(*kv.second.trie);
-		}
-	}
-	return type;
-}
-
 void Set::reindex(Grammar& grammar) {
 	type &= ~ST_SPECIAL;
 	type &= ~ST_CHILD_UNIFY;
@@ -127,13 +111,13 @@ void Set::reindex(Grammar& grammar) {
 	type |= trie_reindex(trie);
 	type |= trie_reindex(trie_special);
 
-	for (uint32_t i=0 ; i<sets.size() ; ++i) {
+	for (uint32_t i = 0; i < sets.size(); ++i) {
 		Set *set = grammar.sets_by_contents.find(sets[i])->second;
 		set->reindex(grammar);
 		if (set->type & ST_SPECIAL) {
 			type |= ST_SPECIAL;
 		}
-		if (set->type & (ST_TAG_UNIFY|ST_SET_UNIFY|ST_CHILD_UNIFY)) {
+		if (set->type & (ST_TAG_UNIFY | ST_SET_UNIFY | ST_CHILD_UNIFY)) {
 			type |= ST_CHILD_UNIFY;
 		}
 		if (set->type & ST_MAPPING) {
@@ -141,7 +125,7 @@ void Set::reindex(Grammar& grammar) {
 		}
 	}
 
-	if (type & (ST_TAG_UNIFY|ST_SET_UNIFY|ST_CHILD_UNIFY)) {
+	if (type & (ST_TAG_UNIFY | ST_SET_UNIFY | ST_CHILD_UNIFY)) {
 		type |= ST_SPECIAL;
 		type |= ST_CHILD_UNIFY;
 	}
@@ -153,7 +137,11 @@ void Set::markUsed(Grammar& grammar) {
 	trie_markused(trie);
 	trie_markused(trie_special);
 
-	for (uint32_t i=0 ; i<sets.size() ; ++i) {
+	boost_foreach (Tag *tag, ff_tags) {
+		tag->markUsed();
+	}
+
+	for (uint32_t i = 0; i < sets.size(); ++i) {
 		Set *set = grammar.sets_by_contents.find(sets[i])->second;
 		set->markUsed(grammar);
 	}
@@ -164,5 +152,4 @@ void Set::resetStatistics() {
 	num_match = 0;
 	total_time = 0;
 }
-
 }

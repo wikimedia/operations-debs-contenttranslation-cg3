@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2014, GrammarSoft ApS
+* Copyright (C) 2007-2016, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -26,28 +26,28 @@
 
 namespace CG3 {
 
-Rule::Rule() :
-name(0),
-wordform(0),
-target(0),
-childset1(0),
-childset2(0),
-line(0),
-number(0),
-varname(0),
-varvalue(0),
-flags(0),
-section(0),
-sub_reading(0),
-weight(0.0),
-quality(0.0),
-type(K_IGNORE),
-maplist(0),
-sublist(0),
-num_fail(0),
-num_match(0),
-total_time(0),
-dep_target(0)
+Rule::Rule()
+  : name(0)
+  , wordform(0)
+  , target(0)
+  , childset1(0)
+  , childset2(0)
+  , line(0)
+  , number(0)
+  , varname(0)
+  , varvalue(0)
+  , flags(0)
+  , section(0)
+  , sub_reading(0)
+  , weight(0.0)
+  , quality(0.0)
+  , type(K_IGNORE)
+  , maplist(0)
+  , sublist(0)
+  , num_fail(0)
+  , num_match(0)
+  , total_time(0)
+  , dep_target(0)
 {
 	// Nothing in the actual body...
 }
@@ -60,7 +60,7 @@ void Rule::setName(const UChar *to) {
 	delete[] name;
 	name = 0;
 	if (to) {
-		name = new UChar[u_strlen(to)+1];
+		name = new UChar[u_strlen(to) + 1];
 		u_strcpy(name, to);
 	}
 }
@@ -75,10 +75,10 @@ void Rule::reverseContextualTests() {
 }
 
 void Rule::resetStatistics() {
-	foreach (ContextList, tests, it, it_end) {
+	foreach (it, tests) {
 		(*it)->resetStatistics();
 	}
-	foreach (ContextList, dep_tests, it, it_end) {
+	foreach (it, dep_tests) {
 		(*it)->resetStatistics();
 	}
 	num_fail = 0;
@@ -86,12 +86,7 @@ void Rule::resetStatistics() {
 	total_time = 0;
 }
 
-inline bool isSetSpecial(uint32_t s, const Grammar& g) {
-	return s && (g.getSet(s)->type & ST_SPECIAL);
-}
-
 bool Rule::cmp_quality(const Rule *a, const Rule *b) {
 	return a->total_time > b->total_time;
 }
-
 }

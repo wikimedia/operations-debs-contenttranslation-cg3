@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2014, GrammarSoft ApS
+* Copyright (C) 2007-2016, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -25,25 +25,23 @@
 
 namespace CG3 {
 
-ContextualTest::ContextualTest() :
-is_used(false),
-offset(0),
-offset_sub(0),
-line(0),
-name(0),
-hash(0),
-seed(0),
-number(0),
-pos(0),
-target(0),
-relation(0),
-barrier(0),
-cbarrier(0),
-num_fail(0),
-num_match(0),
-total_time(0),
-tmpl(0),
-linked(0)
+ContextualTest::ContextualTest()
+  : is_used(false)
+  , offset(0)
+  , offset_sub(0)
+  , line(0)
+  , hash(0)
+  , seed(0)
+  , pos(0)
+  , target(0)
+  , relation(0)
+  , barrier(0)
+  , cbarrier(0)
+  , num_fail(0)
+  , num_match(0)
+  , total_time(0)
+  , tmpl(0)
+  , linked(0)
 {
 	// Nothing in the actual body...
 }
@@ -111,8 +109,8 @@ uint32_t ContextualTest::rehash() {
 	if (tmpl) {
 		hash = hash_value(hash, static_cast<uint32_t>(reinterpret_cast<uintptr_t>(tmpl)));
 	}
-	foreach (ContextList, ors, iter, iter_end) {
-		hash = hash_value(hash, (*iter)->rehash());
+	boost_foreach (ContextualTest *iter, ors) {
+		hash = hash_value(hash, iter->rehash());
 	}
 
 	hash += seed;
@@ -127,8 +125,8 @@ void ContextualTest::resetStatistics() {
 	if (tmpl) {
 		tmpl->resetStatistics();
 	}
-	foreach (ContextList, ors, idts, idts_end) {
-		(*idts)->resetStatistics();
+	boost_foreach (ContextualTest *idts, ors) {
+		idts->resetStatistics();
 	}
 	if (linked) {
 		linked->resetStatistics();
@@ -157,12 +155,11 @@ void ContextualTest::markUsed(Grammar& grammar) {
 	if (tmpl) {
 		tmpl->markUsed(grammar);
 	}
-	foreach (ContextList, ors, idts, idts_end) {
-		(*idts)->markUsed(grammar);
+	boost_foreach (ContextualTest *idts, ors) {
+		idts->markUsed(grammar);
 	}
 	if (linked) {
 		linked->markUsed(grammar);
 	}
 }
-
 }
