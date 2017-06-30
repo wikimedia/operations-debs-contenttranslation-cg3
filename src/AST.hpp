@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2016, GrammarSoft ApS
+* Copyright (C) 2007-2017, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -75,6 +75,7 @@ enum ASTType {
 	AST_SoftDelimiters,
 	AST_StaticSets,
 	AST_StrictTags,
+	AST_ListTags,
 	AST_SubReadings,
 	AST_SubReadingsDirection,
 	AST_Tag,
@@ -166,12 +167,12 @@ void print_ast(UFILE *out, const UChar *b, size_t n, const ASTNode& node) {
 		return;
 	}
 	u_fprintf(out, ">\n");
-	foreach (it, node.cs) {
-		if (it->type == AST_Grammar) {
-			print_ast(out, it->b, n + 1, *it);
+	for (auto& it : node.cs) {
+		if (it.type == AST_Grammar) {
+			print_ast(out, it.b, n + 1, it);
 		}
 		else {
-			print_ast(out, b, n + 1, *it);
+			print_ast(out, b, n + 1, it);
 		}
 	}
 	u_fprintf(out, "%s</%s>\n", indent.c_str(), ASTType_str[node.type]);

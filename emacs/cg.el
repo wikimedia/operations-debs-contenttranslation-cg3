@@ -1,9 +1,9 @@
-;;; cg.el --- major mode for editing Constraint Grammar files
+;;; cg.el --- major mode for editing Constraint Grammar files  -*- lexical-binding: t; coding: utf-8 -*-
 
-;; Copyright (C) 2010-2016 Kevin Brubeck Unhammer
+;; Copyright (C) 2010-2017 Kevin Brubeck Unhammer
 
 ;; Author: Kevin Brubeck Unhammer <unhammer@fsfe.org>
-;; Version: 0.2.0
+;; Version: 0.3.0
 ;; Url: http://beta.visl.sdu.dk/constraint_grammar.html
 ;; Keywords: languages
 
@@ -24,6 +24,13 @@
 
 ;;; Commentary:
 
+;; This package provides a major mode for editing Constraint Grammar
+;; source files, including syntax highlighting and interactive grammar
+;; development from within Emacs.  Use `C-c C-i' to edit the text you
+;; want to edit, then just `C-c C-c' whenever you want to run the
+;; grammar over that text.  Clicking on a line number in the trace
+;; output will take you to the definition of that rule.
+
 ;; Usage:
 ;;
 ;; (autoload 'cg-mode "/path/to/cg.el"
@@ -32,18 +39,19 @@
 ;; ; Or if you use a non-standard file suffix, e.g. .rlx:
 ;; (add-to-list 'auto-mode-alist '("\\.rlx\\'" . cg-mode))
 
-;; I recommend using company-mode for tab-completion, and
-;; smartparens-mode if you're used to it (paredit-mode does not work
-;; well if you have set names with the # character in them). Both are
-;; available from MELPA (see http://melpa.milkbox.net/).
+;; I recommend using `company-mode' for tab-completion, and
+;; `smartparens-mode' if you're used to it (`paredit-mode' does not
+;; work well if you have set names with the # character in them). Both
+;; are available from MELPA (see http://melpa.milkbox.net/).
 ;;
 ;; You can lazy-load company-mode for cg-mode like this:
 ;;
 ;; (eval-after-load 'company-autoloads
-;;     (add-hook 'cg-mode-hook #'company-mode))
+;;     '(add-hook 'cg-mode-hook #'company-mode))
 
 
 ;; TODO:
+;; - investigate bug in `show-smartparens-mode' causing slowness
 ;; - different syntax highlighting for sets and tags (difficult)
 ;; - use something like prolog-clause-start to define M-a/e etc.
 ;; - run vislcg3 --show-unused-sets and buttonise with line numbers (like Occur does)
@@ -51,17 +59,14 @@
 ;; - the rest of the keywords
 ;; - http://beta.visl.sdu.dk/cg3/single/#regex-icase
 ;; - keyword tab-completion
-;; - the quotes-within-quotes thing plays merry hell with
-;;   paredit-doublequote, write a new doublequote function?
-;; - font-lock-syntactic-keywords is obsolete since 24.1
-;; - derive cg-mode from prog-mode?
+;; - `font-lock-syntactic-keywords' is obsolete since 24.1
 ;; - goto-set/list
 ;; - show definition of set/list-at-point in modeline
 ;; - show section name/number in modeline
 
 ;;; Code:
 
-(defconst cg-version "0.2.0" "Version of cg-mode.")
+(defconst cg-version "0.3.0" "Version of cg-mode.")
 
 (eval-when-compile (require 'cl))
 (require 'cl-lib)
@@ -258,8 +263,9 @@ Don't change without re-evaluating the file.")
     ;; using syntactic keywords for "
     (modify-syntax-entry ?\" "." table)
     (modify-syntax-entry ?» "." table)
-  (modify-syntax-entry ?« "." table)
-                       table))
+    (modify-syntax-entry ?« "." table)
+    table)
+  "Syntax table for CG mode.")
 
 (defun cg-beginning-of-defun ()
   (re-search-backward defun-prompt-regexp nil 'noerror)
@@ -352,40 +358,35 @@ With a prefix argument N, (un)comment that many rules."
 
 
 ;;;###autoload
-(defun cg-mode ()
+(define-derived-mode cg-mode prog-mode "CG"
   "Major mode for editing Constraint Grammar files.
 
 CG-mode provides the following specific keyboard key bindings:
 
 \\{cg-mode-map}"
-  (interactive)
-  (kill-all-local-variables)
-  (setq major-mode 'cg-mode
-        mode-name "CG")
-  (use-local-map cg-mode-map)
-  (make-local-variable 'comment-start)
-  (make-local-variable 'comment-start-skip)
-  (make-local-variable 'font-lock-defaults)
-  (make-local-variable 'indent-line-function)
-  (setq comment-start "#"
-        comment-start-skip "#+[\t ]*"
-        font-lock-defaults
-        `((cg-font-lock-keywords cg-font-lock-keywords-1 cg-font-lock-keywords-2)
-          nil				; KEYWORDS-ONLY
-          'case-fold ; some keywords (e.g. x vs X) are case-sensitive,
+  :group 'cg
+  ;; Font lock
+  (set (make-local-variable 'font-lock-defaults)
+       `((cg-font-lock-keywords cg-font-lock-keywords-1 cg-font-lock-keywords-2)
+         nil				; KEYWORDS-ONLY
+         'case-fold ; some keywords (e.g. x vs X) are case-sensitive,
                                         ; but that doesn't matter for highlighting
-          ((?/ . "w") (?~ . "w") (?. . "w") (?- . "w") (?_ . "w"))
-          nil ;	  beginning-of-line		; SYNTAX-BEGIN
-          (font-lock-syntactic-keywords . cg-font-lock-syntactic-keywords)
-          (font-lock-syntactic-face-function . cg-font-lock-syntactic-face-function)))
-  (make-local-variable 'cg-mode-syntax-table)
-  (set-syntax-table cg-mode-syntax-table)
+         ((?/ . "w") (?~ . "w") (?. . "w") (?- . "w") (?_ . "w"))
+         nil ;	  beginning-of-line		; SYNTAX-BEGIN
+         (font-lock-syntactic-keywords . cg-font-lock-syntactic-keywords)
+         (font-lock-syntactic-face-function . cg-font-lock-syntactic-face-function)))
+  ;; Indentation
+  (set (make-local-variable 'indent-line-function) #'cg-indent-line)
+  ;; Comments and blocks
+  (set (make-local-variable 'comment-start) "#")
+  (set (make-local-variable 'comment-start-skip) "#+[\t ]*")
+  (set (make-local-variable 'comment-use-syntax) t)
   (set (make-local-variable 'parse-sexp-ignore-comments) t)
   (set (make-local-variable 'parse-sexp-lookup-properties) t)
   (set (make-local-variable 'defun-prompt-regexp) (concat cg-kw-re "\\(?::[^\n\t ]+\\)[\t ]"))
   (set (make-local-variable 'beginning-of-defun-function) #'cg-beginning-of-defun)
   (set (make-local-variable 'end-of-defun-function) #'cg-end-of-defun)
-  (setq indent-line-function #'cg-indent-line)
+
   (when font-lock-mode
     (setq font-lock-set-defaults nil)
     (font-lock-set-defaults)
@@ -393,8 +394,7 @@ CG-mode provides the following specific keyboard key bindings:
     (font-lock-fontify-buffer))
   (add-hook 'after-change-functions #'cg-after-change nil 'buffer-local)
   (let ((buf (current-buffer)))
-    (run-with-idle-timer 1 'repeat 'cg-output-hl buf))
-  (run-mode-hooks 'cg-mode-hook))
+    (run-with-idle-timer 1 'repeat 'cg-output-hl buf)))
 
 
 (defconst cg-font-lock-syntactic-keywords
@@ -622,11 +622,13 @@ to.")
 (defcustom cg-check-do-cache t
   "If non-nil, `cg-check' caches the output of `cg-pre-pipe' (the
 cache is emptied whenever you make a change in the input buffer,
-or call `cg-check' from another CG file).")
+or call `cg-check' from another CG file)."
+  :group 'cg
+  :type 'bool)
 
 (defvar cg--check-cache-buffer nil "See `cg-check-do-cache'.")
 
-(defun cg-input-mode-bork-cache (from to len)
+(defun cg-input-mode-bork-cache (_from _to _len)
   "Since `cg-check' will not reuse a cache unless `cg--file' and
 `cg--cache-in' match."
   (when cg--check-cache-buffer
@@ -819,7 +821,7 @@ Call `cg-output-set-unhide' to set a regex which will be exempt
 from hiding.  Call `cg-output-show-all' to turn off all hiding."
   (interactive)
   (setq cg--output-hiding-analyses t)
-  (lexical-let (prev)
+  (let (prev)
     (save-excursion
       (goto-char (point-min))
       (while (re-search-forward "^\"<.*>\"" nil 'noerror)
@@ -878,17 +880,18 @@ See `cg-output-hide-analyses'."
 
 ;;;###autoload
 (defcustom cg-check-after-change nil
-  "If non-nil, run `cg-check' on grammar after each change to the
-buffer.")
+  "If non-nil, run `cg-check' on grammar after each change to the buffer."
+  :group 'cg
+  :type 'bool)
 
 ;;;###autoload
 (defcustom cg-check-after-change-secs 1
-  "Minimum seconds between each `cg-check' after a change to a CG
-buffer (so 0 is after each change)."
+  "Minimum seconds between each `cg-check' after a change to a CG buffer.
+Use 0 to check immediately after each change."
   :type 'integer)
 
 (defvar cg--after-change-timer nil)
-(defun cg-after-change (from to len)
+(defun cg-after-change (_from _to _len)
   (when (and cg-check-after-change
              (not (member cg--after-change-timer timer-list)))
     (setq
@@ -955,7 +958,7 @@ something like
 
 Similarly, `cg-post-pipe' is run on output."
   (interactive)
-  (lexical-let*
+  (let*
       ((file (buffer-file-name))
        (tmp (make-temp-file "cg."))
        ;; Run in a separate process buffer from cmd and post-pipe:
@@ -991,16 +994,16 @@ Similarly, `cg-post-pipe' is run on output."
         (with-current-buffer cg--check-cache-buffer
           (cg-end-process (get-buffer-process out) (buffer-string)))
 
-      (lexical-let ((cg-proc (get-buffer-process out))
-                    (pre-proc (start-process "cg-pre-pipe" "*cg-pre-pipe-output*"
-                                             "/bin/bash" "-c" pre-pipe))
-                    (cache-buffer (cg-pristine-cache-buffer file in pre-pipe)))
-        (set-process-filter pre-proc (lambda (pre-proc string)
+      (let ((cg-proc (get-buffer-process out))
+            (pre-proc (start-process "cg-pre-pipe" "*cg-pre-pipe-output*"
+                                     "/bin/bash" "-c" pre-pipe))
+            (cache-buffer (cg-pristine-cache-buffer file in pre-pipe)))
+        (set-process-filter pre-proc (lambda (_pre-proc string)
                                        (with-current-buffer cache-buffer
                                          (insert string))
                                        (when (eq (process-status cg-proc) 'run)
                                          (process-send-string cg-proc string))))
-        (set-process-sentinel pre-proc (lambda (pre-proc string)
+        (set-process-sentinel pre-proc (lambda (_pre-proc _string)
                                          (when (eq (process-status cg-proc) 'run)
                                            (cg-end-process cg-proc))))
         (with-current-buffer in
@@ -1008,7 +1011,7 @@ Similarly, `cg-post-pipe' is run on output."
 
     (display-buffer out)))
 
-(defun cg-check-finish-function (buffer change)
+(defun cg-check-finish-function (buffer _change)
   ;; Note: this makes `recompile' not work, which is why `g' is
   ;; rebound in `cg-output-mode'
   (let ((w (get-buffer-window buffer)))
@@ -1052,10 +1055,10 @@ Similarly, `cg-post-pipe' is run on output."
 
 ;;; Keybindings ---------------------------------------------------------------
 (define-key cg-mode-map (kbd "C-c C-o") #'cg-occur-list)
-(define-key cg-mode-map (kbd "C-c g") #'cg-goto-rule)
+(define-key cg-mode-map (kbd "C-c C-r") #'cg-goto-rule)
 (define-key cg-mode-map (kbd "C-c C-c") #'cg-check)
 (define-key cg-mode-map (kbd "C-c C-i") #'cg-edit-input)
-(define-key cg-mode-map (kbd "C-c c") #'cg-toggle-check-after-change)
+(define-key cg-mode-map (kbd "C-c M-c") #'cg-toggle-check-after-change)
 (define-key cg-mode-map (kbd "C-;") #'cg-comment-or-uncomment-rule)
 (define-key cg-mode-map (kbd "M-#") #'cg-comment-or-uncomment-rule)
 

@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2016, GrammarSoft ApS
+* Copyright (C) 2007-2017, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -300,9 +300,8 @@ int main(int argc, char *argv[]) {
 		buf[0] = 0;
 		buf[sn] = 0;
 		u_charsToUChars(single_rule, buf, sn);
-		foreach (riter, applicator->grammar->rule_by_number) {
-			const CG3::Rule *rule = *riter;
-			if (rule->name && u_strcmp(rule->name, buf) == 0) {
+		for (auto rule : applicator->grammar->rule_by_number) {
+			if (rule->name == buf) {
 				applicator->valid_rules.push_back(rule->number);
 			}
 		}

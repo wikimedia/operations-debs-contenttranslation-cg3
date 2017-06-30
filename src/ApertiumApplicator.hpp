@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2016, GrammarSoft ApS
+* Copyright (C) 2007-2017, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -32,7 +32,6 @@ public:
 
 	void runGrammarOnText(istream& input, UFILE *output);
 
-	bool getNullFlush();
 	bool wordform_case;
 	bool print_word_forms;
 	bool print_only_first;

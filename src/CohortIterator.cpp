@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2016, GrammarSoft ApS
+* Copyright (C) 2007-2017, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -164,11 +164,11 @@ void DepDescendentIter::reset(Cohort *cohort, const ContextualTest *test, bool s
 	m_cohort = 0;
 
 	if (cohort && test) {
-		foreach (dter, cohort->dep_children) {
-			if (cohort->parent->parent->cohort_map.find(*dter) == cohort->parent->parent->cohort_map.end()) {
+		for (auto dter : cohort->dep_children) {
+			if (cohort->parent->parent->cohort_map.find(dter) == cohort->parent->parent->cohort_map.end()) {
 				continue;
 			}
-			Cohort *current = cohort->parent->parent->cohort_map.find(*dter)->second;
+			Cohort *current = cohort->parent->parent->cohort_map.find(dter)->second;
 			bool good = true;
 			if (current->parent != cohort->parent) {
 				if ((!(test->pos & (POS_SPAN_BOTH | POS_SPAN_LEFT))) && current->parent->number < cohort->parent->number) {
@@ -191,18 +191,17 @@ void DepDescendentIter::reset(Cohort *cohort, const ContextualTest *test, bool s
 			added = false;
 			CohortSet to_add;
 
-			foreach (iter, m_descendents) {
-				Cohort *cohort_inner = *iter;
+			for (auto cohort_inner : m_descendents) {
 				if (m_seen.find(cohort_inner) != m_seen.end()) {
 					continue;
 				}
 				m_seen.insert(cohort_inner);
 
-				foreach (dter, cohort_inner->dep_children) {
-					if (cohort_inner->parent->parent->cohort_map.find(*dter) == cohort_inner->parent->parent->cohort_map.end()) {
+				for (auto dter : cohort_inner->dep_children) {
+					if (cohort_inner->parent->parent->cohort_map.find(dter) == cohort_inner->parent->parent->cohort_map.end()) {
 						continue;
 					}
-					Cohort *current = cohort_inner->parent->parent->cohort_map.find(*dter)->second;
+					Cohort *current = cohort_inner->parent->parent->cohort_map.find(dter)->second;
 					bool good = true;
 					if (current->parent != cohort->parent) {
 						if ((!(test->pos & (POS_SPAN_BOTH | POS_SPAN_LEFT))) && current->parent->number < cohort->parent->number) {
@@ -219,8 +218,8 @@ void DepDescendentIter::reset(Cohort *cohort, const ContextualTest *test, bool s
 				}
 			}
 
-			foreach (iter, to_add) {
-				m_descendents.insert(*iter);
+			for (auto iter : to_add) {
+				m_descendents.insert(iter);
 			}
 		} while (added);
 

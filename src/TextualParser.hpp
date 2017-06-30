@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2016, GrammarSoft ApS
+* Copyright (C) 2007-2017, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -54,6 +54,7 @@ public:
 	Grammar *get_grammar() { return result; }
 	const char *filebase;
 	uint32SortedVector strict_tags;
+	uint32SortedVector list_tags;
 
 private:
 	UChar nearbuf[32];
@@ -62,14 +63,14 @@ private:
 	uint32_t seen_mapping_prefix;
 	bool option_vislcg_compat;
 	bool in_section, in_before_sections, in_after_sections, in_null_section;
-	bool no_isets, no_itmpls, strict_wforms, strict_bforms, strict_second;
+	bool no_isets, no_itmpls, strict_wforms, strict_bforms, strict_second, strict_regex=false, strict_icase=false;
 	const char *filename;
 	const char *locale;
 	const char *codepage;
 
-	typedef stdext::hash_map<ContextualTest*, std::pair<size_t, UString> > deferred_t;
+	typedef std::unordered_map<ContextualTest*, std::pair<size_t, UString> > deferred_t;
 	deferred_t deferred_tmpls;
-	std::vector<boost::shared_ptr<std::vector<UChar> > > grammarbufs;
+	std::vector<std::shared_ptr<std::vector<UChar> > > grammarbufs;
 
 	void parseFromUChar(UChar *input, const char *fname = 0);
 	void addRuleToGrammar(Rule *rule);

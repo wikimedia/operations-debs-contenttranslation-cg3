@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2016, GrammarSoft ApS
+* Copyright (C) 2007-2017, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -154,6 +154,7 @@ enum {
 	S_NEGATIVE,
 	S_ONCE,
 	S_ALWAYS,
+	S_SET_DIFF,
 	S_SET_ISECT_U,
 	S_SET_SYMDIFF_U,
 	S_FROM,
@@ -165,6 +166,8 @@ enum {
 	S_STRICT_WFORMS,
 	S_STRICT_BFORMS,
 	S_STRICT_SECOND,
+	S_STRICT_REGEX,
+	S_STRICT_ICASE,
 	S_CMD_SETVAR,
 	S_CMD_REMVAR,
 	STRINGS_COUNT,
@@ -198,6 +201,9 @@ enum {
 	FL_SUB,
 	FL_OUTPUT,
 	FL_CAPTURE_UNIF,
+	FL_REPEAT,
+	FL_BEFORE,
+	FL_AFTER,
 	FLAGS_COUNT,
 };
 }

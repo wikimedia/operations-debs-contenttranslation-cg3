@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2016, GrammarSoft ApS
+* Copyright (C) 2007-2017, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -123,7 +123,7 @@ UOption options[] = {
 	UOPTION_DEF_D("no-sections",           0, UOPT_NO_ARG,       "disables all rules in SECTION parts"),
 	UOPTION_DEF_D("no-after-sections",     0, UOPT_NO_ARG,       "disables all rules in AFTER-SECTIONS parts"),
 
-	UOPTION_DEF_D("trace",               't', UOPT_NO_ARG,       "prints debug output alongside with normal output"),
+	UOPTION_DEF_D("trace",               't', UOPT_OPTIONAL_ARG, "prints debug output alongside normal output; optionally stops execution"),
 	UOPTION_DEF_D("trace-name-only",       0, UOPT_NO_ARG,       "if a rule is named, omit the line number; implies --trace"),
 	UOPTION_DEF_D("trace-no-removed",      0, UOPT_NO_ARG,       "does not print removed readings; implies --trace"),
 	UOPTION_DEF_D("trace-encl",            0, UOPT_NO_ARG,       "traces which enclosure pass is currently happening; implies --trace"),
@@ -152,7 +152,7 @@ UOption options[] = {
 	UOPTION_DEF_D("split-mappings",        0, UOPT_NO_ARG,       "keep mapped readings separate in output"),
 	UOPTION_DEF_D("show-end-tags",       'e', UOPT_NO_ARG,       "allows the <<< tags to appear in output"),
 	UOPTION_DEF_D("show-unused-sets",      0, UOPT_NO_ARG,       "prints a list of unused sets and their line numbers; implies --grammar-only"),
-	UOPTION_DEF_D("show-tags",             0, UOPT_NO_ARG,       "prints a list of unique tags; implies --grammar-only"),
+	UOPTION_DEF_D("show-tags",             0, UOPT_NO_ARG,       "prints a list of unique used tags; implies --grammar-only"),
 	UOPTION_DEF_D("show-tag-hashes",       0, UOPT_NO_ARG,       "prints a list of tags and their hashes as they are parsed during the run"),
 	UOPTION_DEF_D("show-set-hashes",       0, UOPT_NO_ARG,       "prints a list of sets and their hashes; implies --grammar-only"),
 	UOPTION_DEF_D("dump-ast",              0, UOPT_NO_ARG,       "prints the grammar parse tree; implies --grammar-only"),

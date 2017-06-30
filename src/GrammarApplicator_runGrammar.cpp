@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2016, GrammarSoft ApS
+* Copyright (C) 2007-2017, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -141,10 +141,14 @@ void GrammarApplicator::runGrammarOnText(istream& input, UFILE *output) {
 				}
 				cleaned[packoff++] = line[i];
 			}
-			// If we reached this, buffer wasn't big enough. Double the size of the buffer and try again.
-			offset = line.size() - 2;
-			line.resize(line.size() * 2, 0);
-			cleaned.resize(line.size() + 1, 0);
+			// Either buffer wasn't big enough, or someone fed us malformed data thinking U+0085 is ellipsis when it in fact is Next Line (NEL)
+			line = cleaned;
+			offset = packoff;
+			if (packoff > line.size() / 2) {
+				// If we reached this, buffer wasn't big enough. Double the size of the buffer and try again.
+				line.resize(line.size() * 2, 0);
+				cleaned.resize(line.size() + 1, 0);
+			}
 		}
 
 	gotaline:
@@ -198,8 +202,8 @@ void GrammarApplicator::runGrammarOnText(istream& input, UFILE *output) {
 					u_fprintf(ux_stderr, "Warning: Soft limit of %u cohorts reached at line %u but found suitable soft delimiter.\n", soft_limit, numLines);
 					u_fflush(ux_stderr);
 				}
-				foreach (iter, cCohort->readings) {
-					addTagToReading(**iter, endtag);
+				for (auto iter : cCohort->readings) {
+					addTagToReading(*iter, endtag);
 				}
 
 				splitAllMappings(all_mappings, *cCohort, true);
@@ -215,8 +219,8 @@ void GrammarApplicator::runGrammarOnText(istream& input, UFILE *output) {
 					u_fprintf(ux_stderr, "Warning: Hard limit of %u cohorts reached at line %u - forcing break.\n", hard_limit, numLines);
 					u_fflush(ux_stderr);
 				}
-				foreach (iter, cCohort->readings) {
-					addTagToReading(**iter, endtag);
+				for (auto iter : cCohort->readings) {
+					addTagToReading(*iter, endtag);
 				}
 
 				splitAllMappings(all_mappings, *cCohort, true);
@@ -373,7 +377,7 @@ void GrammarApplicator::runGrammarOnText(istream& input, UFILE *output) {
 				cCohort->appendReading(cReading);
 			}
 			else {
-				BOOST_AUTO(iter, all_mappings.find(cReading));
+				auto iter = all_mappings.find(cReading);
 				if (iter != all_mappings.end()) {
 					while (iter->second.size() > 1) {
 						u_fprintf(ux_stderr, "Warning: Sub-reading mapping %S on line %u will be discarded.\n", iter->second.back()->tag.c_str(), numLines);
@@ -394,8 +398,8 @@ void GrammarApplicator::runGrammarOnText(istream& input, UFILE *output) {
 				gWindow->dep_map.clear();
 				gWindow->dep_window.clear();
 
-				foreach (iter, cSWindow->cohorts.back()->readings) {
-					addTagToReading(**iter, endtag);
+				for (auto iter : cSWindow->cohorts.back()->readings) {
+					addTagToReading(*iter, endtag);
 				}
 
 				cSWindow = gWindow->allocAppendSingleWindow();
@@ -415,8 +419,8 @@ void GrammarApplicator::runGrammarOnText(istream& input, UFILE *output) {
 				if (grammar->has_bag_of_tags) {
 					// This is slow and not 100% correct as it doesn't remove the tags from the previous window
 					cCohort->parent = cSWindow;
-					foreach (rit, cCohort->readings) {
-						reflowReading(**rit);
+					for (auto rit : cCohort->readings) {
+						reflowReading(*rit);
 					}
 				}
 			}
@@ -431,15 +435,17 @@ void GrammarApplicator::runGrammarOnText(istream& input, UFILE *output) {
 		istext:
 			if (cleaned[0]) {
 				if (u_strcmp(&cleaned[0], stringbits[S_CMD_FLUSH].getTerminatedBuffer()) == 0) {
-					u_fprintf(ux_stderr, "Info: FLUSH encountered on line %u. Flushing...\n", numLines);
+					if (verbosity_level > 0) {
+						u_fprintf(ux_stderr, "Info: FLUSH encountered on line %u. Flushing...\n", numLines);
+					}
 					if (cCohort && cSWindow) {
 						splitAllMappings(all_mappings, *cCohort, true);
 						cSWindow->appendCohort(cCohort);
 						if (cCohort->readings.empty()) {
 							initEmptyCohort(*cCohort);
 						}
-						foreach (iter, cCohort->readings) {
-							addTagToReading(**iter, endtag);
+						for (auto iter : cCohort->readings) {
+							addTagToReading(*iter, endtag);
 						}
 						cReading = lReading = 0;
 						cCohort = lCohort = 0;
@@ -478,15 +484,21 @@ void GrammarApplicator::runGrammarOnText(istream& input, UFILE *output) {
 					fflush(stderr);
 				}
 				else if (u_strcmp(&cleaned[0], stringbits[S_CMD_IGNORE].getTerminatedBuffer()) == 0) {
-					u_fprintf(ux_stderr, "Info: IGNORE encountered on line %u. Passing through all input...\n", numLines);
+					if (verbosity_level > 0) {
+						u_fprintf(ux_stderr, "Info: IGNORE encountered on line %u. Passing through all input...\n", numLines);
+					}
 					ignoreinput = true;
 				}
 				else if (u_strcmp(&cleaned[0], stringbits[S_CMD_RESUME].getTerminatedBuffer()) == 0) {
-					u_fprintf(ux_stderr, "Info: RESUME encountered on line %u. Resuming CG...\n", numLines);
+					if (verbosity_level > 0) {
+						u_fprintf(ux_stderr, "Info: RESUME encountered on line %u. Resuming CG...\n", numLines);
+					}
 					ignoreinput = false;
 				}
 				else if (u_strcmp(&cleaned[0], stringbits[S_CMD_EXIT].getTerminatedBuffer()) == 0) {
-					u_fprintf(ux_stderr, "Info: EXIT encountered on line %u. Exiting...\n", numLines);
+					if (verbosity_level > 0) {
+						u_fprintf(ux_stderr, "Info: EXIT encountered on line %u. Exiting...\n", numLines);
+					}
 					u_fprintf(output, "%S", &line[0]);
 					goto CGCMD_EXIT;
 				}
@@ -618,8 +630,8 @@ void GrammarApplicator::runGrammarOnText(istream& input, UFILE *output) {
 		if (cCohort->readings.empty()) {
 			initEmptyCohort(*cCohort);
 		}
-		foreach (iter, cCohort->readings) {
-			addTagToReading(**iter, endtag);
+		for (auto iter : cCohort->readings) {
+			addTagToReading(*iter, endtag);
 		}
 		cReading = 0;
 		cCohort = 0;

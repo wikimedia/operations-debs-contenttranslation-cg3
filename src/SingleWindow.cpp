@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2016, GrammarSoft ApS
+* Copyright (C) 2007-2017, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -74,8 +74,8 @@ SingleWindow::~SingleWindow() {
 		}
 	}
 
-	foreach (iter, cohorts) {
-		delete *iter;
+	for (auto iter : cohorts) {
+		delete iter;
 	}
 	if (next && previous) {
 		next->previous = previous;
@@ -103,8 +103,8 @@ void SingleWindow::clear() {
 		}
 	}
 
-	foreach (iter, cohorts) {
-		free_cohort(*iter);
+	for (auto iter : cohorts) {
+		free_cohort(iter);
 	}
 	if (next && previous) {
 		next->previous = previous;
@@ -128,7 +128,7 @@ void SingleWindow::clear() {
 	cohorts.clear();
 	valid_rules.clear();
 	hit_external.clear();
-	boost_foreach (CohortSet& cs, rule_to_cohorts) {
+	for (auto& cs : rule_to_cohorts) {
 		cs.clear();
 	}
 	variables_set.clear();
