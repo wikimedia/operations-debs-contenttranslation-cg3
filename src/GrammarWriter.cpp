@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2016, GrammarSoft ApS
+* Copyright (C) 2007-2017, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -53,12 +53,12 @@ void GrammarWriter::printSet(UFILE *output, const Set& curset) {
 		used_sets.insert(curset.number);
 		u_fprintf(output, "LIST %S = ", curset.name.c_str());
 		std::set<TagVector> tagsets[] = { trie_getTagsOrdered(curset.trie), trie_getTagsOrdered(curset.trie_special) };
-		boost_foreach (const std::set<TagVector>& tvs, tagsets) {
-			boost_foreach (const TagVector& tags, tvs) {
+		for (auto& tvs : tagsets) {
+			for (auto& tags : tvs) {
 				if (tags.size() > 1) {
 					u_fprintf(output, "(");
 				}
-				boost_foreach (const Tag *tag, tags) {
+				for (auto tag : tags) {
 					printTag(output, *tag);
 					u_fprintf(output, " ");
 				}
@@ -104,10 +104,6 @@ int GrammarWriter::writeGrammar(UFILE *output) {
 		u_fprintf(ux_stderr, "Error: No grammar provided - cannot continue!\n");
 		CG3Quit(1);
 	}
-	if (grammar->is_binary) {
-		u_fprintf(ux_stderr, "Error: Grammar is binary and cannot be output in textual form!\n");
-		CG3Quit(1);
-	}
 
 	if (statistics) {
 		if (ceil(grammar->total_time) == floor(grammar->total_time)) {
@@ -130,7 +126,7 @@ int GrammarWriter::writeGrammar(UFILE *output) {
 
 	if (!grammar->static_sets.empty()) {
 		u_fprintf(output, "STATIC-SETS =");
-		boost_foreach (const UString& str, grammar->static_sets) {
+		for (auto& str : grammar->static_sets) {
 			u_fprintf(output, " %S", str.c_str());
 		}
 		u_fprintf(output, " ;\n");
@@ -149,14 +145,26 @@ int GrammarWriter::writeGrammar(UFILE *output) {
 	u_fprintf(output, "\n");
 
 	used_sets.clear();
-	boost_foreach (Set *s, grammar->sets_list) {
+	for (auto s : grammar->sets_list) {
+		if (s->name.empty()) {
+			if (s == grammar->delimiters) {
+				s->name.assign(stringbits[S_DELIMITSET].getTerminatedBuffer());
+			}
+			else if (s == grammar->soft_delimiters) {
+				s->name.assign(stringbits[S_SOFTDELIMITSET].getTerminatedBuffer());
+			}
+			else {
+				s->name.resize(12);
+				s->name.resize(u_sprintf(&s->name[0], "S%u", s->number));
+			}
+		}
 		if (s->name[0] == '_' && s->name[1] == 'G' && s->name[2] == '_') {
 			s->name.insert(s->name.begin(), '3');
 			s->name.insert(s->name.begin(), 'G');
 			s->name.insert(s->name.begin(), 'C');
 		}
 	}
-	boost_foreach (Set *s, grammar->sets_list) {
+	for (auto s : grammar->sets_list) {
 		printSet(output, *s);
 	}
 	u_fprintf(output, "\n");
@@ -171,8 +179,8 @@ int GrammarWriter::writeGrammar(UFILE *output) {
 	//*/
 
 	bool found = false;
-	foreach (rule_iter, grammar->rule_by_number) {
-		const Rule& r = **rule_iter;
+	for (auto rule_iter : grammar->rule_by_number) {
+		const Rule& r = *rule_iter;
 		if (r.section == -1) {
 			if (!found) {
 				u_fprintf(output, "\nBEFORE-SECTIONS\n");
@@ -182,11 +190,11 @@ int GrammarWriter::writeGrammar(UFILE *output) {
 			u_fprintf(output, " ;\n");
 		}
 	}
-	foreach (isec, grammar->sections) {
+	for (auto isec : grammar->sections) {
 		found = false;
-		foreach (rule_iter, grammar->rule_by_number) {
-			const Rule& r = **rule_iter;
-			if (r.section == (int32_t)*isec) {
+		for (auto rule_iter : grammar->rule_by_number) {
+			const Rule& r = *rule_iter;
+			if (r.section == static_cast<int32_t>(isec)) {
 				if (!found) {
 					u_fprintf(output, "\nSECTION\n");
 					found = true;
@@ -197,8 +205,8 @@ int GrammarWriter::writeGrammar(UFILE *output) {
 		}
 	}
 	found = false;
-	foreach (rule_iter, grammar->rule_by_number) {
-		const Rule& r = **rule_iter;
+	for (auto rule_iter : grammar->rule_by_number) {
+		const Rule& r = *rule_iter;
 		if (r.section == -2) {
 			if (!found) {
 				u_fprintf(output, "\nAFTER-SECTIONS\n");
@@ -209,8 +217,8 @@ int GrammarWriter::writeGrammar(UFILE *output) {
 		}
 	}
 	found = false;
-	foreach (rule_iter, grammar->rule_by_number) {
-		const Rule& r = **rule_iter;
+	for (auto rule_iter : grammar->rule_by_number) {
+		const Rule& r = *rule_iter;
 		if (r.section == -3) {
 			if (!found) {
 				u_fprintf(output, "\nNULL-SECTION\n");
@@ -241,14 +249,19 @@ void GrammarWriter::printRule(UFILE *to, const Rule& rule) {
 
 	u_fprintf(to, "%S", keywords[rule.type].getTerminatedBuffer());
 
-	if (rule.name && !(rule.name[0] == '_' && rule.name[1] == 'R' && rule.name[2] == '_')) {
-		u_fprintf(to, ":%S", rule.name);
+	if (!rule.name.empty() && !(rule.name[0] == '_' && rule.name[1] == 'R' && rule.name[2] == '_')) {
+		u_fprintf(to, ":%S", rule.name.c_str());
 	}
 	u_fprintf(to, " ");
 
 	for (uint32_t i = 0; i < FLAGS_COUNT; i++) {
 		if (rule.flags & (1 << i)) {
-			u_fprintf(to, "%S ", g_flags[i].getTerminatedBuffer());
+			if (i == FL_SUB) {
+				u_fprintf(to, "%S:%d ", g_flags[i].getTerminatedBuffer(), rule.sub_reading);
+			}
+			else {
+				u_fprintf(to, "%S ", g_flags[i].getTerminatedBuffer());
+			}
 		}
 	}
 
@@ -264,9 +277,9 @@ void GrammarWriter::printRule(UFILE *to, const Rule& rule) {
 		u_fprintf(to, "%S ", grammar->sets_list[rule.target]->name.c_str());
 	}
 
-	foreach (it, rule.tests) {
+	for (auto it : rule.tests) {
 		u_fprintf(to, "(");
-		printContextualTest(to, **it);
+		printContextualTest(to, *it);
 		u_fprintf(to, ") ");
 	}
 
@@ -274,9 +287,9 @@ void GrammarWriter::printRule(UFILE *to, const Rule& rule) {
 		u_fprintf(to, "TO (");
 		printContextualTest(to, *(rule.dep_target));
 		u_fprintf(to, ") ");
-		foreach (it, rule.dep_tests) {
+		for (auto it : rule.dep_tests) {
 			u_fprintf(to, "(");
-			printContextualTest(to, **it);
+			printContextualTest(to, *it);
 			u_fprintf(to, ") ");
 		}
 	}
@@ -295,7 +308,7 @@ void GrammarWriter::printContextualTest(UFILE *to, const ContextualTest& test) {
 		u_fprintf(to, "T:%u ", test.tmpl->hash);
 	}
 	else if (!test.ors.empty()) {
-		for (BOOST_AUTO(iter, test.ors.begin()); iter != test.ors.end();) {
+		for (auto iter = test.ors.begin(); iter != test.ors.end();) {
 			u_fprintf(to, "(");
 			printContextualTest(to, **iter);
 			u_fprintf(to, ")");

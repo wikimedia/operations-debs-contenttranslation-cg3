@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2016, GrammarSoft ApS
+* Copyright (C) 2007-2017, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -108,9 +108,14 @@ int main(int argc, char *argv[]) {
 	CG3::FormatConverter applicator(ux_stderr);
 	applicator.setGrammar(&grammar);
 
-	boost::scoped_ptr<CG3::istream> instream;
+	std::unique_ptr<CG3::istream> instream;
 
 	CG3::CG_FORMATS fmt = CG3::FMT_INVALID;
+
+	if (options[ADD_TAGS].doesOccur) {
+		options[IN_PLAIN].doesOccur = true;
+		dynamic_cast<CG3::PlaintextApplicator&>(applicator).add_tags = true;
+	}
 
 	if (options[IN_CG].doesOccur) {
 		fmt = CG3::FMT_CG;

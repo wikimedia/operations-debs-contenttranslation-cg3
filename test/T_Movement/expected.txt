@@ -1,7 +1,17 @@
+"<anchor>"
+	"anchor" #1->1
+"<target>"
+	"target" 1 #2->2
+"<target>"
+	"target" 2 #3->3
+"<target>"
+	"target" 3 #4->4
+"<$.>"
+
 "<word>"
 	"word" wanted third #1->6
 "<word>"
-	"word" wanted first #2->10
+	"word" wanted first #2->9
 "<word>"
 	"word" wanted seventh #3->8
 "<word>"

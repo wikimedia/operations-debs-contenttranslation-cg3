@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2016, GrammarSoft ApS
+* Copyright (C) 2007-2017, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -88,11 +88,11 @@ public:
 
 typedef sorted_vector<Set*> SetSet;
 typedef std::vector<Set*> SetVector;
-typedef stdext::hash_map<uint32_t, Set*> Setuint32HashMap;
+typedef std::unordered_map<uint32_t, Set*> Setuint32HashMap;
 
 inline uint8_t trie_reindex(const trie_t& trie) {
 	uint8_t type = 0;
-	boost_foreach (const trie_t::value_type& kv, trie) {
+	for (auto& kv : trie) {
 		if (kv.first->type & T_SPECIAL) {
 			type |= ST_SPECIAL;
 		}

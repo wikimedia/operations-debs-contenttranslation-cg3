@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2016, GrammarSoft ApS
+* Copyright (C) 2007-2017, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -63,7 +63,7 @@ public:
 	ReadingList readings;
 	ReadingList deleted;
 	ReadingList delayed;
-	typedef bc::flat_map<uint32_t, int32_t> num_t;
+	typedef bc::flat_map<uint32_t, double> num_t;
 	num_t num_max, num_min;
 	uint32SortedVector dep_children;
 	boost::dynamic_bitset<> possible_sets;
@@ -72,8 +72,8 @@ public:
 	RelationCtn relations;
 	RelationCtn relations_input;
 
-	int32_t getMin(uint32_t key);
-	int32_t getMax(uint32_t key);
+	double getMin(uint32_t key);
+	double getMax(uint32_t key);
 
 	void detach();
 
@@ -96,7 +96,7 @@ private:
 struct compare_Cohort;
 
 typedef sorted_vector<Cohort*, compare_Cohort> CohortSet;
-typedef stdext::hash_map<uint32_t, CohortSet> uint32ToCohortsMap;
+typedef std::unordered_map<uint32_t, CohortSet> uint32ToCohortsMap;
 
 Cohort *alloc_cohort(SingleWindow *p);
 void free_cohort(Cohort *c);

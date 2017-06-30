@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2016, GrammarSoft ApS
+* Copyright (C) 2007-2017, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -137,7 +137,7 @@ void Set::markUsed(Grammar& grammar) {
 	trie_markused(trie);
 	trie_markused(trie_special);
 
-	boost_foreach (Tag *tag, ff_tags) {
+	for (auto tag : ff_tags) {
 		tag->markUsed();
 	}
 

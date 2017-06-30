@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2016, GrammarSoft ApS
+* Copyright (C) 2007-2017, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -42,6 +42,7 @@ int BinaryGrammar::readBinaryGrammar(FILE *input) {
 	uint8_t u8tmp = 0;
 	UErrorCode err = U_ZERO_ERROR;
 	UConverter *conv = ucnv_open("UTF-8", &err);
+	std::stringstream buffer;
 
 	if (fread_throw(&cbuffers[0][0], 1, 4, input) != 4) {
 		std::cerr << "Error: Error reading first 4 bytes from grammar!" << std::endl;
@@ -140,6 +141,20 @@ int BinaryGrammar::readBinaryGrammar(FILE *input) {
 		if (fields & (1 << 7)) {
 			fread_throw(&i32tmp, sizeof(int32_t), 1, input);
 			t->comparison_val = (int32_t)ntohl(i32tmp);
+			if (t->comparison_val <= std::numeric_limits<int32_t>::min()) {
+				t->comparison_val = NUMERIC_MIN;
+			}
+			if (t->comparison_val >= std::numeric_limits<int32_t>::max()) {
+				t->comparison_val = NUMERIC_MAX;
+			}
+		}
+		if (fields & (1 << 12)) {
+			char buf[sizeof(uint64_t)+ sizeof(int32_t)] = {};
+			fread_throw(&buf[0], sizeof(buf), 1, input);
+			buffer.str("");
+			buffer.clear();
+			buffer.write(buf, sizeof(buf));
+			t->comparison_val = readSwapped<double>(buffer);
 		}
 
 		if (fields & (1 << 8)) {
@@ -205,6 +220,7 @@ int BinaryGrammar::readBinaryGrammar(FILE *input) {
 				}
 			}
 		}
+		// 1 << 12 used earlier
 
 		grammar->single_tags[t->hash] = t;
 		grammar->single_tags_list[t->number] = t;
@@ -336,10 +352,10 @@ int BinaryGrammar::readBinaryGrammar(FILE *input) {
 	}
 
 	// Actually assign sets to the varstring tags now that sets are loaded
-	foreach (iter, tag_varsets) {
-		Tag *t = grammar->single_tags_list[iter->first];
-		foreach (uit, iter->second) {
-			Set *s = grammar->sets_list[*uit];
+	for (auto iter : tag_varsets) {
+		Tag *t = grammar->single_tags_list[iter.first];
+		for (auto uit : iter.second) {
+			Set *s = grammar->sets_list[uit];
 			t->vs_sets->push_back(s);
 		}
 	}
@@ -484,15 +500,15 @@ int BinaryGrammar::readBinaryGrammar(FILE *input) {
 	}
 
 	// Bind the templates to where they are used
-	foreach (it, deferred_tmpls) {
-		it->first->tmpl = grammar->contexts.find(it->second)->second;
+	for (auto it : deferred_tmpls) {
+		it.first->tmpl = grammar->contexts.find(it.second)->second;
 	}
 
 	// Bind the OR'ed contexts to where they are used
-	foreach (it, deferred_ors) {
-		it->first->ors.reserve(it->second.size());
-		foreach (orit, it->second) {
-			it->first->ors.push_back(grammar->contexts.find(*orit)->second);
+	for (auto it : deferred_ors) {
+		it.first->ors.reserve(it.second.size());
+		for (auto orit : it.second) {
+			it.first->ors.push_back(grammar->contexts.find(orit)->second);
 		}
 	}
 

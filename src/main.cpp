@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2016, GrammarSoft ApS
+* Copyright (C) 2007-2017, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -311,21 +311,6 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	if (grammar.is_binary) {
-		if (options[GRAMMAR_BIN].doesOccur || options[GRAMMAR_OUT].doesOccur) {
-			std::cerr << "Error: Binary grammars cannot be rewritten." << std::endl;
-			CG3Quit(1);
-		}
-		if (options[STATISTICS].doesOccur) {
-			std::cerr << "Error: Statistics cannot be gathered with a binary grammar." << std::endl;
-			CG3Quit(1);
-		}
-		if (options[OPTIMIZE_UNSAFE].doesOccur || options[OPTIMIZE_SAFE].doesOccur) {
-			std::cerr << "Error: Binary grammars cannot be further optimized." << std::endl;
-			CG3Quit(1);
-		}
-	}
-
 	if (options[STATISTICS].doesOccur && !(options[GRAMMAR_BIN].doesOccur || options[GRAMMAR_OUT].doesOccur)) {
 		std::cerr << "Error: Does not make sense to gather statistics if you are not writing the compiled grammar back out somehow." << std::endl;
 		CG3Quit(1);
@@ -358,9 +343,9 @@ int main(int argc, char *argv[]) {
 
 	if (options[OPTIMIZE_UNSAFE].doesOccur) {
 		std::vector<uint32_t> bad;
-		foreach (ir, grammar.rule_by_number) {
-			if ((*ir)->num_match == 0) {
-				bad.push_back((*ir)->number);
+		for (auto ir : grammar.rule_by_number) {
+			if (ir->num_match == 0) {
+				bad.push_back(ir->number);
 			}
 		}
 		reverse_foreach (br, bad) {
@@ -374,17 +359,17 @@ int main(int argc, char *argv[]) {
 	}
 	if (options[OPTIMIZE_SAFE].doesOccur) {
 		CG3::RuleVector bad;
-		foreach (ir, grammar.rule_by_number) {
-			if ((*ir)->num_match == 0) {
-				bad.push_back(*ir);
+		for (auto ir : grammar.rule_by_number) {
+			if (ir->num_match == 0) {
+				bad.push_back(ir);
 			}
 		}
 		reverse_foreach (br, bad) {
 			grammar.rule_by_number.erase(grammar.rule_by_number.begin() + (*br)->number);
 		}
-		foreach (br, bad) {
-			(*br)->number = grammar.rule_by_number.size();
-			grammar.rule_by_number.push_back(*br);
+		for (auto br : bad) {
+			br->number = grammar.rule_by_number.size();
+			grammar.rule_by_number.push_back(br);
 		}
 		std::cerr << "Optimizer moved " << bad.size() << " rules." << std::endl;
 		grammar.reindex();
@@ -480,6 +465,9 @@ void GAppSetOpts(CG3::GrammarApplicator& applicator, UConverter *conv) {
 	}
 	if (options[TRACE].doesOccur) {
 		applicator.trace = true;
+		if (options[TRACE].value) {
+			CG3::GAppSetOpts_ranged(options[TRACE].value, applicator.trace_rules, false);
+		}
 	}
 	if (options[TRACE_NAME_ONLY].doesOccur) {
 		applicator.trace = true;
@@ -519,9 +507,8 @@ void GAppSetOpts(CG3::GrammarApplicator& applicator, UConverter *conv) {
 			buf[0] = 0;
 			ucnv_toUChars(conv, buf, sn * 3, options[RULE].value, sn, &status);
 
-			foreach (riter, applicator.grammar->rule_by_number) {
-				const CG3::Rule *rule = *riter;
-				if (rule->name && u_strcmp(rule->name, buf) == 0) {
+			for (auto rule : applicator.grammar->rule_by_number) {
+				if (rule->name == buf) {
 					applicator.valid_rules.push_back(rule->number);
 				}
 			}

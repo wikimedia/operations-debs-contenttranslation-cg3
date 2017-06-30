@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2016, GrammarSoft ApS
+* Copyright (C) 2007-2017, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -26,7 +26,7 @@
 #include "stdafx.hpp"
 #include <vector>
 #include <list>
-#include <stdint.h>
+#include <cstdint>
 
 namespace CG3 {
 class Grammar;

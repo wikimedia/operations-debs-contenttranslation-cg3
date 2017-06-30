@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2016, GrammarSoft ApS
+* Copyright (C) 2007-2017, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -139,6 +139,11 @@ const char *cg3_tag_gettext_u8(cg3_tag *tag);
 const uint16_t *cg3_tag_gettext_u16(cg3_tag *tag);
 const uint32_t *cg3_tag_gettext_u32(cg3_tag *tag);
 const wchar_t *cg3_tag_gettext_w(cg3_tag *tag);
+
+// These 3 from Paul Meurer <paul.meurer@uni.no>
+size_t cg3_cohort_numdelreadings(cg3_cohort *cohort);
+cg3_reading *cg3_cohort_getdelreading(cg3_cohort *cohort, size_t which);
+size_t cg3_reading_gettrace_ruletype(cg3_reading *reading_, size_t which);
 
 #ifdef __cplusplus
 }

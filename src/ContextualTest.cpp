@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2016, GrammarSoft ApS
+* Copyright (C) 2007-2017, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -109,7 +109,7 @@ uint32_t ContextualTest::rehash() {
 	if (tmpl) {
 		hash = hash_value(hash, static_cast<uint32_t>(reinterpret_cast<uintptr_t>(tmpl)));
 	}
-	boost_foreach (ContextualTest *iter, ors) {
+	for (auto iter : ors) {
 		hash = hash_value(hash, iter->rehash());
 	}
 
@@ -125,7 +125,7 @@ void ContextualTest::resetStatistics() {
 	if (tmpl) {
 		tmpl->resetStatistics();
 	}
-	boost_foreach (ContextualTest *idts, ors) {
+	for (auto idts : ors) {
 		idts->resetStatistics();
 	}
 	if (linked) {
@@ -155,7 +155,7 @@ void ContextualTest::markUsed(Grammar& grammar) {
 	if (tmpl) {
 		tmpl->markUsed(grammar);
 	}
-	boost_foreach (ContextualTest *idts, ors) {
+	for (auto idts : ors) {
 		idts->markUsed(grammar);
 	}
 	if (linked) {

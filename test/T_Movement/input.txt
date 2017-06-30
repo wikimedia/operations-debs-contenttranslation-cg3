@@ -1,5 +1,15 @@
+"<target>"
+	"target" 1
+"<target>"
+	"target" 2
+"<target>"
+	"target" 3
+"<anchor>"
+	"anchor"
+"<$.>"
+
 "<word>"
-	"word" wanted first #1->4
+	"word" wanted first #1->2
 "<word>"
 	"word" wanted second #2->0
 "<word>"

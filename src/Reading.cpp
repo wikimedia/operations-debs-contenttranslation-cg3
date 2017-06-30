@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2016, GrammarSoft ApS
+* Copyright (C) 2007-2017, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -176,9 +176,9 @@ Reading *Reading::allocateReading(const Reading& r) {
 uint32_t Reading::rehash() {
 	hash = 0;
 	hash_plain = 0;
-	foreach (iter, tags) {
-		if (!mapping || mapping->hash != *iter) {
-			hash = hash_value(*iter, hash);
+	for (auto iter : tags) {
+		if (!mapping || mapping->hash != iter) {
+			hash = hash_value(iter, hash);
 		}
 	}
 	hash_plain = hash;

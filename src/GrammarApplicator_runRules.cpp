@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2016, GrammarSoft ApS
+* Copyright (C) 2007-2017, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -36,6 +36,7 @@ enum {
 	RV_NOTHING   = 1,
 	RV_SOMETHING = 2,
 	RV_DELIMITED = 4,
+	RV_TRACERULE = 8,
 };
 
 bool GrammarApplicator::doesWordformsMatch(const Tag *cword, const Tag *rword) {
@@ -77,9 +78,9 @@ bool GrammarApplicator::updateValidRules(const uint32IntervalVector& rules, uint
 	Grammar::rules_by_tag_t::const_iterator it = grammar->rules_by_tag.find(hash);
 	if (it != grammar->rules_by_tag.end()) {
 		Cohort& c = *(reading.parent);
-		foreach (rsit, (it->second)) {
-			if (updateRuleToCohorts(c, *rsit) && rules.contains(*rsit)) {
-				intersects.insert(*rsit);
+		for (auto rsit : (it->second)) {
+			if (updateRuleToCohorts(c, rsit) && rules.contains(rsit)) {
+				intersects.insert(rsit);
 			}
 		}
 	}
@@ -89,21 +90,20 @@ bool GrammarApplicator::updateValidRules(const uint32IntervalVector& rules, uint
 void GrammarApplicator::indexSingleWindow(SingleWindow& current) {
 	current.valid_rules.clear();
 	current.rule_to_cohorts.resize(grammar->rule_by_number.size());
-	boost_foreach (CohortSet& cs, current.rule_to_cohorts) {
+	for (auto& cs : current.rule_to_cohorts) {
 		cs.clear();
 	}
 
-	foreach (iter, current.cohorts) {
-		Cohort *c = *iter;
+	for (auto c : current.cohorts) {
 		for (uint32_t psit = 0; psit < c->possible_sets.size(); ++psit) {
 			if (c->possible_sets.test(psit) == false) {
 				continue;
 			}
-			BOOST_AUTO(rules_it, grammar->rules_by_set.find(psit));
+			auto rules_it = grammar->rules_by_set.find(psit);
 			if (rules_it == grammar->rules_by_set.end()) {
 				continue;
 			}
-			boost_foreach (uint32_t rsit, rules_it->second) {
+			for (auto rsit : rules_it->second) {
 				updateRuleToCohorts(*c, rsit);
 			}
 		}
@@ -119,24 +119,24 @@ TagList GrammarApplicator::getTagList(const Set& theSet, bool unif_mode) const {
 void GrammarApplicator::getTagList(const Set& theSet, TagList& theTags, bool unif_mode) const {
 	if (theSet.type & ST_SET_UNIFY) {
 		const Set& pSet = *(grammar->sets_list[theSet.sets[0]]);
-		foreach (iter, pSet.sets) {
-			if (unif_sets->count(*iter)) {
-				getTagList(*(grammar->sets_list[*iter]), theTags);
+		for (auto iter : pSet.sets) {
+			if (unif_sets->count(iter)) {
+				getTagList(*(grammar->sets_list[iter]), theTags);
 			}
 		}
 	}
 	else if (theSet.type & ST_TAG_UNIFY) {
-		foreach (iter, theSet.sets) {
-			getTagList(*(grammar->sets_list[*iter]), theTags, true);
+		for (auto iter : theSet.sets) {
+			getTagList(*(grammar->sets_list[iter]), theTags, true);
 		}
 	}
 	else if (!theSet.sets.empty()) {
-		foreach (iter, theSet.sets) {
-			getTagList(*(grammar->sets_list[*iter]), theTags, unif_mode);
+		for (auto iter : theSet.sets) {
+			getTagList(*(grammar->sets_list[iter]), theTags, unif_mode);
 		}
 	}
 	else if (unif_mode) {
-		BOOST_AUTO(iter, unif_tags->find(theSet.number));
+		auto iter = unif_tags->find(theSet.number);
 		if (iter != unif_tags->end()) {
 			trie_getTagList(theSet.trie, theTags, iter->second);
 			trie_getTagList(theSet.trie_special, theTags, iter->second);
@@ -174,15 +174,15 @@ Reading *GrammarApplicator::get_sub_reading(Reading *tr, int sub_reading) {
 			tr = tr->next;
 			reading->tags_list.push_back(0);
 			reading->tags_list.insert(reading->tags_list.end(), tr->tags_list.begin(), tr->tags_list.end());
-			boost_foreach (uint32_t tag, tr->tags) {
+			for (auto tag : tr->tags) {
 				reading->tags.insert(tag);
 				reading->tags_bloom.insert(tag);
 			}
-			boost_foreach (uint32_t tag, tr->tags_plain) {
+			for (auto tag : tr->tags_plain) {
 				reading->tags_plain.insert(tag);
 				reading->tags_plain_bloom.insert(tag);
 			}
-			boost_foreach (uint32_t tag, tr->tags_textual) {
+			for (auto tag : tr->tags_textual) {
 				reading->tags_textual.insert(tag);
 				reading->tags_textual_bloom.insert(tag);
 			}
@@ -215,12 +215,88 @@ Reading *GrammarApplicator::get_sub_reading(Reading *tr, int sub_reading) {
 			ttr = ttr->next;
 			--ntr;
 		}
+		if (!tr->next) {
+			tr = 0;
+		}
 		for (int i = ntr; i < sub_reading && tr; ++i) {
 			tr = tr->next;
 		}
 	}
 	return tr;
 }
+
+#define TRACE \
+	do { \
+		reading.hit_by.push_back(rule.number); \
+		if (rule.sub_reading == 32767) { \
+			reading_head.hit_by.push_back(rule.number); \
+		} \
+	} while(0)
+
+#define FILL_TAG_LIST(taglist) \
+	do { \
+		for (TagList::iterator it = (taglist)->begin(); it != (taglist)->end();) { \
+			if (reading.tags.find((*it)->hash) == reading.tags.end()) { \
+				const Tag *tt = *it; \
+				it = (taglist)->erase(it); \
+				if (tt->type & T_SPECIAL) { \
+					if (regexgrps.second == 0) { \
+						regexgrps.second = &regexgrps_store[used_regex]; \
+					} \
+					uint32_t stag = doesTagMatchReading(reading, *tt, false, true); \
+					if (stag) { \
+						(taglist)->insert(it, single_tags.find(stag)->second); \
+					} \
+				} \
+				continue; \
+			} \
+			++it; \
+		} \
+	} while(0)
+
+#define APPEND_TAGLIST_TO_READING(taglist, reading) \
+	do { \
+		for (auto tter : (taglist)) { \
+			uint32_t hash = tter->hash; \
+			while (tter->type & T_VARSTRING) { \
+				tter = generateVarstringTag(tter); \
+			} \
+			if (tter->type & T_MAPPING || tter->tag[0] == grammar->mapping_prefix) { \
+				mappings->push_back(tter); \
+			} \
+			else { \
+				hash = addTagToReading((reading), tter); \
+			} \
+			if (updateValidRules(rules, intersects, hash, (reading))) { \
+				iter_rules = intersects.find(rule.number); \
+				iter_rules_end = intersects.end(); \
+			} \
+		} \
+	} while (0)
+
+#define INSERT_TAGLIST_TO_READING(iter, taglist, reading) \
+	do { \
+		for (auto tag : (taglist)) { \
+			if (tag->type & T_VARSTRING) { \
+				tag = generateVarstringTag(tag); \
+			} \
+			if (tag->hash == grammar->tag_any) { \
+				break; \
+			} \
+			if (tag->type & T_MAPPING || tag->tag[0] == grammar->mapping_prefix) { \
+				mappings->push_back(tag); \
+			} \
+			else { \
+				(iter) = (reading).tags_list.insert((iter), tag->hash); \
+				++(iter); \
+			} \
+			if (updateValidRules(rules, intersects, tag->hash, (reading))) { \
+				iter_rules = intersects.find(rule.number); \
+				iter_rules_end = intersects.end(); \
+			} \
+		} \
+		reflowReading(reading); \
+	} while(0)
 
 /**
  * Applies the passed rules to the passed SingleWindow.
@@ -257,6 +333,8 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 	current.parent->cohort_map[0] = current.cohorts.front();
 
 	foreach (iter_rules, intersects) {
+	repeat_rule:
+		bool rule_did_something = false;
 		uint32_t j = (*iter_rules);
 
 		// Check whether this rule is in the allowed rule list from cmdline flag --rule(s)
@@ -512,9 +590,8 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 							// Keeps track of where we have been, to prevent infinite recursion in trees with loops
 							dep_deep_seen.clear();
 							// Reset the counters for which types of CohortIterator we have in play
-							std::fill(ci_depths.begin(), ci_depths.end(), 0);
-							tmpl_cntxs.clear();
-							tmpl_cntx_pos = 0;
+							std::fill(ci_depths.begin(), ci_depths.end(), static_cast<uint32_t>(0));
+							tmpl_cntx.clear();
 							// Run the contextual test...
 							if (!(test->pos & POS_PASS_ORIGIN) && (no_pass_origin || (test->pos & POS_NO_PASS_ORIGIN))) {
 								test_good = (runContextualTest(&current, c, test, 0, cohort) != 0);
@@ -548,7 +625,7 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 						++rule.num_match;
 
 						if (regex_prop && i && regexgrps_c.size()) {
-							BOOST_AUTO(it, regexgrps_c.find(cohort->readings[i - 1]->number));
+							auto it = regexgrps_c.find(cohort->readings[i - 1]->number);
 							if (it != regexgrps_c.end()) {
 								regexgrps_c.insert(std::make_pair(reading->number, it->second));
 								regexgrps_z.insert(std::make_pair(reading->number, regexgrps_z.find(cohort->readings[i - 1]->number)->second));
@@ -644,7 +721,7 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 				}
 				if (dry_run) {
 					if (good) {
-						reading.hit_by.push_back(rule.number);
+						TRACE;
 					}
 					continue;
 				}
@@ -664,12 +741,12 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 					if (good) {
 						selected.push_back(&reading_head);
 						index_ruleCohort_no.clear();
-						reading.hit_by.push_back(rule.number);
+						TRACE;
 					}
 					else {
 						removed.push_back(&reading_head);
 						index_ruleCohort_no.clear();
-						reading.hit_by.push_back(rule.number);
+						TRACE;
 					}
 					if (good) {
 						if (debug_level > 0) {
@@ -687,7 +764,7 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 						}
 						else {
 							removed.push_back(&reading_head);
-							reading.hit_by.push_back(rule.number);
+							TRACE;
 						}
 						index_ruleCohort_no.clear();
 						if (debug_level > 0) {
@@ -695,7 +772,7 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 						}
 					}
 					else if (type == K_JUMP) {
-						reading.hit_by.push_back(rule.number);
+						TRACE;
 						const Tag *to = getTagList(*rule.maplist).front();
 						uint32FlatHashMap::const_iterator it = grammar->anchors.find(to->hash);
 						if (it == grammar->anchors.end()) {
@@ -705,13 +782,12 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 							iter_rules = intersects.lower_bound(it->second);
 							--iter_rules;
 						}
-						break;
+						goto repeat_rule;
 					}
 					else if (type == K_REMVARIABLE) {
-						reading.hit_by.push_back(rule.number);
+						TRACE;
 						const TagList names = getTagList(*rule.maplist);
-						foreach (tter, names) {
-							const Tag *tag = *tter;
+						for (auto tag : names) {
 							variables.erase(tag->hash);
 							if (rule.flags & RF_OUTPUT) {
 								current.variables_output.insert(tag->hash);
@@ -721,7 +797,7 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 						break;
 					}
 					else if (type == K_SETVARIABLE) {
-						reading.hit_by.push_back(rule.number);
+						TRACE;
 						const TagList names = getTagList(*rule.maplist);
 						const TagList values = getTagList(*rule.sublist);
 						variables[names.front()->hash] = values.front()->hash;
@@ -746,7 +822,7 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 						if (ei == externals.end()) {
 							Tag *ext = single_tags.find(rule.varname)->second;
 							UErrorCode err = U_ZERO_ERROR;
-							u_strToUTF8(&cbuffers[0][0], CG3_BUFFER_SIZE - 1, 0, ext->tag.c_str(), ext->tag.length(), &err);
+							u_strToUTF8(&cbuffers[0][0], CG3_BUFFER_SIZE - 1, 0, ext->tag.c_str(), ext->tag.size(), &err);
 
 							Process& es = externals[rule.varname];
 							try {
@@ -775,9 +851,9 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 						break;
 					}
 					else if (type == K_REMCOHORT) {
-						foreach (iter, cohort->readings) {
-							(*iter)->hit_by.push_back(rule.number);
-							(*iter)->deleted = true;
+						for (auto iter : cohort->readings) {
+							iter->hit_by.push_back(rule.number);
+							iter->deleted = true;
 						}
 						// Move any enclosed parentheses to the previous cohort
 						if (!cohort->enclosed.empty()) {
@@ -785,8 +861,8 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 							cohort->enclosed.clear();
 						}
 						// Remove the cohort from all rules
-						foreach (cs, current.rule_to_cohorts) {
-							cs->erase(cohort);
+						for (auto cs : current.rule_to_cohorts) {
+							cs.erase(cohort);
 						}
 						// Forward all children of this cohort to the parent of this cohort
 						// ToDo: Named relations must be erased
@@ -798,8 +874,8 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 						cohort->type |= CT_REMOVED;
 						cohort->prev->removed.push_back(cohort);
 						cohort->detach();
-						foreach (cm, current.parent->cohort_map) {
-							cm->second->dep_children.erase(cohort->dep_self);
+						for (auto cm : current.parent->cohort_map) {
+							cm.second->dep_children.erase(cohort->dep_self);
 						}
 						current.parent->cohort_map.erase(cohort->global_number);
 						current.cohorts.erase(current.cohorts.begin() + cohort->local_number);
@@ -809,7 +885,7 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 						gWindow->rebuildCohortLinks();
 						// If we just removed the last cohort, add <<< to the new last cohort
 						if (cohort->readings.front()->tags.count(endtag)) {
-							boost_foreach (Reading *r, current.cohorts.back()->readings) {
+							for (auto r : current.cohorts.back()->readings) {
 								addTagToReading(*r, endtag);
 								if (updateValidRules(rules, intersects, endtag, *r)) {
 									iter_rules = intersects.find(rule.number);
@@ -824,16 +900,13 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 							rocit = cohortset->end();
 						}
 						else {
-							rocit = cohortset->find(current.cohorts[cohort->local_number]);
-							if (rocit != cohortset->end()) {
-								++rocit;
-							}
+							rocit = cohortset->lower_bound(current.cohorts[cohort->local_number]);
 						}
 						readings_changed = true;
 						break;
 					}
 					else if (type == K_ADDCOHORT_AFTER || type == K_ADDCOHORT_BEFORE) {
-						reading.hit_by.push_back(rule.number);
+						TRACE;
 						index_ruleCohort_no.clear();
 
 						Cohort *cCohort = alloc_cohort(&current);
@@ -841,23 +914,23 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 
 						Tag *wf = 0;
 						std::vector<TagList> readings;
-						BOOST_AUTO(theTags, ss_taglist.get());
+						auto theTags = ss_taglist.get();
 						getTagList(*rule.maplist, theTags);
 
-						foreach (tter, *theTags) {
-							while ((*tter)->type & T_VARSTRING) {
-								*tter = generateVarstringTag(*tter);
+						for (auto tter : *theTags) {
+							while (tter->type & T_VARSTRING) {
+								tter = generateVarstringTag(tter);
 							}
-							if ((*tter)->type & T_WORDFORM) {
-								cCohort->wordform = *tter;
-								wf = *tter;
+							if (tter->type & T_WORDFORM) {
+								cCohort->wordform = tter;
+								wf = tter;
 								continue;
 							}
 							if (!wf) {
 								u_fprintf(ux_stderr, "Error: There must be a wordform before any other tags in ADDCOHORT on line %u before input line %u.\n", rule.line, numLines);
 								CG3Quit(1);
 							}
-							if ((*tter)->type & T_BASEFORM) {
+							if (tter->type & T_BASEFORM) {
 								readings.resize(readings.size() + 1);
 								readings.back().push_back(wf);
 							}
@@ -865,23 +938,23 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 								u_fprintf(ux_stderr, "Error: There must be a baseform after the wordform in ADDCOHORT on line %u before input line %u.\n", rule.line, numLines);
 								CG3Quit(1);
 							}
-							readings.back().push_back(*tter);
+							readings.back().push_back(tter);
 						}
 
-						foreach (rit, readings) {
+						for (auto rit : readings) {
 							Reading *cReading = alloc_reading(cCohort);
 							++numReadings;
 							insert_if_exists(cReading->parent->possible_sets, grammar->sets_any);
 							cReading->hit_by.push_back(rule.number);
 							cReading->noprint = false;
 							TagList mappings;
-							foreach (tter, *rit) {
-								uint32_t hash = (*tter)->hash;
-								while ((*tter)->type & T_VARSTRING) {
-									*tter = generateVarstringTag(*tter);
+							for (auto tter : rit) {
+								uint32_t hash = tter->hash;
+								while (tter->type & T_VARSTRING) {
+									tter = generateVarstringTag(tter);
 								}
-								if ((*tter)->type & T_MAPPING || (*tter)->tag[0] == grammar->mapping_prefix) {
-									mappings.push_back(*tter);
+								if (tter->type & T_MAPPING || tter->tag[0] == grammar->mapping_prefix) {
+									mappings.push_back(tter);
 								}
 								else {
 									hash = addTagToReading(*cReading, hash);
@@ -904,11 +977,40 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 							initEmptyCohort(*cCohort);
 						}
 
-						if (type == K_ADDCOHORT_BEFORE) {
-							current.cohorts.insert(current.cohorts.begin() + cohort->local_number, cCohort);
+						CohortSet cohorts;
+						if (rule.childset1) {
+							for (auto iter : current.cohorts) {
+								// Always consider the target cohort a match
+								if (iter->global_number == cohort->global_number) {
+									cohorts.insert(iter);
+								}
+								else if (iter->dep_parent == cohort->global_number && doesSetMatchCohortNormal(*iter, rule.childset1)) {
+									cohorts.insert(iter);
+								}
+							}
+							CohortSet more;
+							for (auto iter : current.cohorts) {
+								for (auto cht : cohorts) {
+									// Do not grab the whole tree from the root, in case WithChild is not (*)
+									if (cht->global_number == cohort->global_number) {
+										continue;
+									}
+									if (isChildOf(iter, cht)) {
+										more.insert(iter);
+									}
+								}
+							}
+							cohorts.insert(more.begin(), more.end());
 						}
 						else {
-							current.cohorts.insert(current.cohorts.begin() + cohort->local_number + 1, cCohort);
+							cohorts.insert(cohort);
+						}
+
+						if (type == K_ADDCOHORT_BEFORE) {
+							current.cohorts.insert(current.cohorts.begin() + cohorts.front()->local_number, cCohort);
+						}
+						else {
+							current.cohorts.insert(current.cohorts.begin() + cohorts.back()->local_number + 1, cCohort);
 						}
 
 						foreach (iter, current.cohorts) {
@@ -916,10 +1018,10 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 						}
 						// If the new cohort is now the last cohort, add <<< to it and remove <<< from previous last cohort
 						if (current.cohorts.back() == cCohort) {
-							boost_foreach (Reading *r, current.cohorts[current.cohorts.size() - 2]->readings) {
+							for (auto r : current.cohorts[current.cohorts.size() - 2]->readings) {
 								delTagFromReading(*r, endtag);
 							}
-							boost_foreach (Reading *r, current.cohorts.back()->readings) {
+							for (auto r : current.cohorts.back()->readings) {
 								addTagToReading(*r, endtag);
 								if (updateValidRules(rules, intersects, endtag, *r)) {
 									iter_rules = intersects.find(rule.number);
@@ -941,16 +1043,16 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 
 						std::vector<std::pair<Cohort*, std::vector<TagList> > > cohorts;
 
-						BOOST_AUTO(theTags, ss_taglist.get());
+						auto theTags = ss_taglist.get();
 						getTagList(*rule.maplist, theTags);
 
 						Tag *wf = 0;
-						foreach (tter, *theTags) {
-							if ((*tter)->type & T_WORDFORM) {
+						for (auto tter : *theTags) {
+							if (tter->type & T_WORDFORM) {
 								cohorts.resize(cohorts.size() + 1);
 								cohorts.back().first = alloc_cohort(&current);
 								cohorts.back().first->global_number = gWindow->cohort_counter++;
-								wf = *tter;
+								wf = tter;
 								while (wf->type & T_VARSTRING) {
 									wf = generateVarstringTag(wf);
 								}
@@ -975,17 +1077,17 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 						size_t i = 0;
 						std::vector<TagList> *readings = &cohorts.front().second;
 						Tag *bf = 0;
-						foreach (tter, *theTags) {
-							if ((*tter)->type & T_WORDFORM) {
+						for (auto tter : *theTags) {
+							if (tter->type & T_WORDFORM) {
 								++i;
 								bf = 0;
 								continue;
 							}
-							if ((*tter)->type & T_BASEFORM) {
+							if (tter->type & T_BASEFORM) {
 								readings = &cohorts[i - 1].second;
 								readings->resize(readings->size() + 1);
 								readings->back().push_back(cohorts[i - 1].first->wordform);
-								bf = *tter;
+								bf = tter;
 							}
 							if (!bf) {
 								u_fprintf(ux_stderr, "Error: There must be a baseform after the wordform in SPLITCOHORT on line %u before input line %u.\n", rule.line, numLines);
@@ -994,7 +1096,7 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 
 							UChar dep_self[12] = {};
 							UChar dep_parent[12] = {};
-							if (u_sscanf((*tter)->tag.c_str(), "%[0-9cd]->%[0-9pm]", &dep_self, &dep_parent) == 2) {
+							if (u_sscanf(tter->tag.c_str(), "%[0-9cd]->%[0-9pm]", &dep_self, &dep_parent) == 2) {
 								if (dep_self[0] == 'c' || dep_self[0] == 'd') {
 									cohort_dep[i - 1].first = DEP_NO_PARENT;
 									if (rel_trg == DEP_NO_PARENT) {
@@ -1014,11 +1116,11 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 								}
 								continue;
 							}
-							if ((*tter)->tag.size() == 3 && (*tter)->tag[0] == 'R' && (*tter)->tag[1] == ':' && (*tter)->tag[2] == '*') {
+							if (tter->tag.size() == 3 && tter->tag[0] == 'R' && tter->tag[1] == ':' && tter->tag[2] == '*') {
 								rel_trg = i - 1;
 								continue;
 							}
-							readings->back().push_back(*tter);
+							readings->back().push_back(tter);
 						}
 
 						if (rel_trg == DEP_NO_PARENT) {
@@ -1029,8 +1131,7 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 							Cohort *cCohort = cohorts[i].first;
 							readings = &cohorts[i].second;
 
-							foreach (rit, *readings) {
-								TagList& tags = *rit;
+							for (auto tags : *readings) {
 								Reading *cReading = alloc_reading(cCohort);
 								++numReadings;
 								insert_if_exists(cReading->parent->possible_sets, grammar->sets_any);
@@ -1056,13 +1157,13 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 									}
 								}
 
-								foreach (tter, tags) {
-									uint32_t hash = (*tter)->hash;
-									while ((*tter)->type & T_VARSTRING) {
-										*tter = generateVarstringTag(*tter);
+								for (auto tter : tags) {
+									uint32_t hash = tter->hash;
+									while (tter->type & T_VARSTRING) {
+										tter = generateVarstringTag(tter);
 									}
-									if ((*tter)->type & T_MAPPING || (*tter)->tag[0] == grammar->mapping_prefix) {
-										mappings.push_back(*tter);
+									if (tter->type & T_MAPPING || tter->tag[0] == grammar->mapping_prefix) {
+										mappings.push_back(tter);
 									}
 									else {
 										hash = addTagToReading(*cReading, hash);
@@ -1100,7 +1201,9 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 							}
 
 							if (cohort_dep[i].second == DEP_NO_PARENT) {
-								attachParentChild(*current.parent->cohort_map[cohort->dep_parent], *cCohort, true, true);
+								if (current.parent->cohort_map.count(cohort->dep_parent)) {
+									attachParentChild(*current.parent->cohort_map[cohort->dep_parent], *cCohort, true, true);
+								}
 							}
 							else {
 								attachParentChild(*current.parent->cohort_map[cohorts.front().first->global_number + cohort_dep[i].second - 1], *cCohort, true, true);
@@ -1118,11 +1221,11 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 								};
 								for (size_t w = 0; w < 3; ++w) {
 									for (size_t sw = 0; sw < swss[w].second; ++sw) {
-										foreach (ch, swss[w].first[sw]->cohorts) {
-											foreach (rel, (*ch)->relations) {
-												if (rel->second.count(cohort->global_number)) {
-													rel->second.erase(cohort->global_number);
-													rel->second.insert(cCohort->global_number);
+										for (auto ch : swss[w].first[sw]->cohorts) {
+											for (auto& rel : ch->relations) {
+												if (rel.second.count(cohort->global_number)) {
+													rel.second.erase(cohort->global_number);
+													rel.second.insert(cCohort->global_number);
 												}
 											}
 										}
@@ -1132,9 +1235,9 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 						}
 
 						// Remove the source cohort
-						foreach (iter, cohort->readings) {
-							(*iter)->hit_by.push_back(rule.number);
-							(*iter)->deleted = true;
+						for (auto iter : cohort->readings) {
+							iter->hit_by.push_back(rule.number);
+							iter->deleted = true;
 						}
 						// Move any enclosed parentheses to the previous cohort
 						if (!cohort->enclosed.empty()) {
@@ -1144,8 +1247,8 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 						cohort->type |= CT_REMOVED;
 						cohort->prev->removed.push_back(cohort);
 						cohort->detach();
-						foreach (cm, current.parent->cohort_map) {
-							cm->second->dep_children.erase(cohort->dep_self);
+						for (auto cm : current.parent->cohort_map) {
+							cm.second->dep_children.erase(cohort->dep_self);
 						}
 						current.parent->cohort_map.erase(cohort->global_number);
 						current.cohorts.erase(current.cohorts.begin() + cohort->local_number);
@@ -1165,27 +1268,43 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 					}
 					else if (rule.type == K_ADD || rule.type == K_MAP) {
 						index_ruleCohort_no.clear();
-						reading.hit_by.push_back(rule.number);
+						TRACE;
 						reading.noprint = false;
-						BOOST_AUTO(mappings, ss_taglist.get());
-						BOOST_AUTO(theTags, ss_taglist.get());
+						auto mappings = ss_taglist.get();
+						auto theTags = ss_taglist.get();
 						getTagList(*rule.maplist, theTags);
 
-						foreach (tter, *theTags) {
-							uint32_t hash = (*tter)->hash;
-							while ((*tter)->type & T_VARSTRING) {
-								*tter = generateVarstringTag(*tter);
+						bool did_insert = false;
+						if (rule.childset1) {
+							auto spot_tags = ss_taglist.get();
+							getTagList(*grammar->sets_list[rule.childset1], spot_tags);
+							FILL_TAG_LIST(spot_tags);
+							auto it = reading.tags_list.begin();
+							for (; it != reading.tags_list.end() ; ++it) {
+								bool found = true;
+								auto tmp = it;
+								for (auto tag : *spot_tags) {
+									if (*tmp != tag->hash) {
+										found = false;
+										break;
+									}
+									++tmp;
+								}
+								if (found) {
+									break;
+								}
 							}
-							if ((*tter)->type & T_MAPPING || (*tter)->tag[0] == grammar->mapping_prefix) {
-								mappings->push_back(*tter);
+							if (rule.flags & RF_AFTER) {
+								std::advance(it, spot_tags->size());
 							}
-							else {
-								hash = addTagToReading(reading, *tter);
+							if (it != reading.tags_list.end()) {
+								INSERT_TAGLIST_TO_READING(it, *theTags, reading);
+								did_insert = true;
 							}
-							if (updateValidRules(rules, intersects, hash, reading)) {
-								iter_rules = intersects.find(rule.number);
-								iter_rules_end = intersects.end();
-							}
+						}
+
+						if (!did_insert) {
+							APPEND_TAGLIST_TO_READING(*theTags, reading);
 						}
 						if (!mappings->empty()) {
 							splitMappings(mappings, *cohort, reading, rule.type == K_MAP);
@@ -1205,32 +1324,18 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 					}
 					else if (rule.type == K_REPLACE) {
 						index_ruleCohort_no.clear();
-						reading.hit_by.push_back(rule.number);
+						TRACE;
 						reading.noprint = false;
 						reading.tags_list.clear();
 						reading.tags_list.push_back(cohort->wordform->hash);
 						reading.tags_list.push_back(reading.baseform);
 						reflowReading(reading);
-						BOOST_AUTO(mappings, ss_taglist.get());
-						BOOST_AUTO(theTags, ss_taglist.get());
+						auto mappings = ss_taglist.get();
+						auto theTags = ss_taglist.get();
 						getTagList(*rule.maplist, theTags);
 
-						foreach (tter, *theTags) {
-							uint32_t hash = (*tter)->hash;
-							while ((*tter)->type & T_VARSTRING) {
-								*tter = generateVarstringTag(*tter);
-							}
-							if ((*tter)->type & T_MAPPING || (*tter)->tag[0] == grammar->mapping_prefix) {
-								mappings->push_back(*tter);
-							}
-							else {
-								hash = addTagToReading(reading, *tter);
-							}
-							if (updateValidRules(rules, intersects, hash, reading)) {
-								iter_rules = intersects.find(rule.number);
-								iter_rules_end = intersects.end();
-							}
-						}
+						APPEND_TAGLIST_TO_READING(*theTags, reading);
+
 						if (!mappings->empty()) {
 							splitMappings(mappings, *cohort, reading, true);
 						}
@@ -1242,33 +1347,17 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 						// ToDo: Check whether this substitution will do nothing at all to the end result
 						// ToDo: Not actually...instead, test whether any reading in the cohort already is the end result
 
-						BOOST_AUTO(theTags, ss_taglist.get());
+						auto theTags = ss_taglist.get();
 						getTagList(*rule.sublist, theTags);
 
 						// Modify the list of tags to remove to be the actual list of tags present, including matching regex and icase tags
-						for (TagList::iterator it = theTags->begin(); it != theTags->end();) {
-							if (reading.tags.find((*it)->hash) == reading.tags.end()) {
-								const Tag *tt = *it;
-								it = theTags->erase(it);
-								if (tt->type & T_SPECIAL) {
-									if (regexgrps.second == 0) {
-										regexgrps.second = &regexgrps_store[used_regex];
-									}
-									uint32_t stag = doesTagMatchReading(reading, *tt, false, true);
-									if (stag) {
-										theTags->insert(it, single_tags.find(stag)->second);
-									}
-								}
-								continue;
-							}
-							++it;
-						}
+						FILL_TAG_LIST(theTags);
 
 						// Perform the tag removal, remembering the position of the final removed tag for use as insertion spot
 						size_t tpos = std::numeric_limits<size_t>::max();
 						bool plain = true;
 						for (size_t i = 0; i < reading.tags_list.size();) {
-							BOOST_AUTO(&remter, reading.tags_list[i]);
+							auto& remter = reading.tags_list[i];
 
 							if (plain && remter == (*theTags->begin())->hash) {
 								if (reading.baseform == remter) {
@@ -1277,8 +1366,8 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 								remter = substtag;
 								tpos = i;
 								for (size_t j = 1; j < theTags->size() && i < reading.tags_list.size(); ++j, ++i) {
-									BOOST_AUTO(&remter, reading.tags_list[i]);
-									BOOST_AUTO(tter, (*theTags)[j]->hash);
+									auto& remter = reading.tags_list[i];
+									auto tter = (*theTags)[j]->hash;
 									if (remter != tter) {
 										plain = false;
 										break;
@@ -1292,14 +1381,14 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 								continue;
 							}
 
-							foreach (tter, *theTags) {
-								if (remter != (*tter)->hash) {
+							for (auto tter : *theTags) {
+								if (remter != tter->hash) {
 									continue;
 								}
 								tpos = i;
 								remter = substtag;
-								reading.tags.erase((*tter)->hash);
-								if (reading.baseform == (*tter)->hash) {
+								reading.tags.erase(tter->hash);
+								if (reading.baseform == tter->hash) {
 									reading.baseform = 0;
 								}
 							}
@@ -1323,14 +1412,14 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 
 							Tag *wf = 0;
 							index_ruleCohort_no.clear();
-							reading.hit_by.push_back(rule.number);
+							TRACE;
 							reading.noprint = false;
 							if (tpos >= reading.tags_list.size()) {
 								tpos = reading.tags_list.size() - 1;
 							}
 							++tpos;
-							BOOST_AUTO(mappings, ss_taglist.get());
-							BOOST_AUTO(theTags, ss_taglist.get());
+							auto mappings = ss_taglist.get();
+							auto theTags = ss_taglist.get();
 							getTagList(*rule.maplist, theTags);
 
 							for (size_t i = 0; i < reading.tags_list.size();) {
@@ -1338,8 +1427,7 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 									reading.tags_list.erase(reading.tags_list.begin() + i);
 									tpos = i;
 
-									foreach (tter, *theTags) {
-										Tag *tag = *tter;
+									for (auto tag : *theTags) {
 										if (tag->type & T_VARSTRING) {
 											tag = generateVarstringTag(tag);
 										}
@@ -1372,20 +1460,20 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 								splitMappings(mappings, *cohort, reading, true);
 							}
 							if (wf && wf != reading.parent->wordform) {
-								boost_foreach (Reading *r, reading.parent->readings) {
+								for (auto r : reading.parent->readings) {
 									delTagFromReading(*r, reading.parent->wordform);
 									addTagToReading(*r, wf);
 								}
-								boost_foreach (Reading *r, reading.parent->deleted) {
+								for (auto r : reading.parent->deleted) {
 									delTagFromReading(*r, reading.parent->wordform);
 									addTagToReading(*r, wf);
 								}
-								boost_foreach (Reading *r, reading.parent->delayed) {
+								for (auto r : reading.parent->delayed) {
 									delTagFromReading(*r, reading.parent->wordform);
 									addTagToReading(*r, wf);
 								}
 								reading.parent->wordform = wf;
-								boost_foreach (Rule *r, grammar->wf_rules) {
+								for (auto r : grammar->wf_rules) {
 									if (doesWordformsMatch(wf, r->wordform)) {
 										current.rule_to_cohorts[r->number].insert(cohort);
 										intersects.insert(r->number);
@@ -1408,25 +1496,25 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 
 						Tag *bf = 0;
 						std::vector<TagList> readings;
-						BOOST_AUTO(theTags, ss_taglist.get());
+						auto theTags = ss_taglist.get();
 						getTagList(*rule.maplist, theTags);
 
-						foreach (tter, *theTags) {
-							while ((*tter)->type & T_VARSTRING) {
-								*tter = generateVarstringTag(*tter);
+						for (auto tter : *theTags) {
+							while (tter->type & T_VARSTRING) {
+								tter = generateVarstringTag(tter);
 							}
-							if ((*tter)->type & T_BASEFORM) {
-								bf = *tter;
+							if (tter->type & T_BASEFORM) {
+								bf = tter;
 								readings.resize(readings.size() + 1);
 							}
 							if (bf == 0) {
 								u_fprintf(ux_stderr, "Error: There must be a baseform before any other tags in APPEND on line %u.\n", rule.line);
 								CG3Quit(1);
 							}
-							readings.back().push_back(*tter);
+							readings.back().push_back(tter);
 						}
 
-						foreach (rit, readings) {
+						for (auto rit : readings) {
 							Reading *cReading = alloc_reading(cohort);
 							++numReadings;
 							insert_if_exists(cReading->parent->possible_sets, grammar->sets_any);
@@ -1434,16 +1522,16 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 							cReading->hit_by.push_back(rule.number);
 							cReading->noprint = false;
 							TagList mappings;
-							foreach (tter, *rit) {
-								uint32_t hash = (*tter)->hash;
-								while ((*tter)->type & T_VARSTRING) {
-									*tter = generateVarstringTag(*tter);
+							for (auto tter : rit) {
+								uint32_t hash = tter->hash;
+								while (tter->type & T_VARSTRING) {
+									tter = generateVarstringTag(tter);
 								}
-								if ((*tter)->type & T_MAPPING || (*tter)->tag[0] == grammar->mapping_prefix) {
-									mappings.push_back(*tter);
+								if (tter->type & T_MAPPING || tter->tag[0] == grammar->mapping_prefix) {
+									mappings.push_back(tter);
 								}
 								else {
-									hash = addTagToReading(*cReading, *tter);
+									hash = addTagToReading(*cReading, tter);
 								}
 								if (updateValidRules(rules, intersects, hash, *cReading)) {
 									iter_rules = intersects.find(rule.number);
@@ -1470,43 +1558,61 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 						break;
 					}
 					else if (rule.type == K_COPY) {
+						// ToDo: Also copy sub-readings
+						// ToDo: Maybe just goto Substitute directly?
 						Reading *cReading = cohort->allocateAppendReading();
 						++numReadings;
 						index_ruleCohort_no.clear();
 						cReading->hit_by.push_back(rule.number);
 						cReading->noprint = false;
-						foreach (iter, reading.tags_list) {
-							addTagToReading(*cReading, *iter);
+						for (auto iter : reading.tags_list) {
+							addTagToReading(*cReading, iter);
 						}
 
 						if (rule.sublist) {
-							// ToDo: Use the code from Substitute to make this match and remove special tags
-							BOOST_AUTO(excepts, ss_taglist.get());
+							auto excepts = ss_taglist.get();
 							getTagList(*rule.sublist, excepts);
-							foreach (tter, *excepts) {
-								delTagFromReading(*cReading, *tter);
+							FILL_TAG_LIST(excepts);
+							for (auto tter : *excepts) {
+								delTagFromReading(*cReading, tter);
 							}
 						}
 
-						BOOST_AUTO(mappings, ss_taglist.get());
-						BOOST_AUTO(theTags, ss_taglist.get());
+						auto mappings = ss_taglist.get();
+						auto theTags = ss_taglist.get();
 						getTagList(*rule.maplist, theTags);
 
-						foreach (tter, *theTags) {
-							uint32_t hash = (*tter)->hash;
-							while ((*tter)->type & T_VARSTRING) {
-								*tter = generateVarstringTag(*tter);
+						bool did_insert = false;
+						if (rule.childset1) {
+							auto spot_tags = ss_taglist.get();
+							getTagList(*grammar->sets_list[rule.childset1], spot_tags);
+							FILL_TAG_LIST(spot_tags);
+							auto it = cReading->tags_list.begin();
+							for (; it != cReading->tags_list.end(); ++it) {
+								bool found = true;
+								auto tmp = it;
+								for (auto tag : *spot_tags) {
+									if (*tmp != tag->hash) {
+										found = false;
+										break;
+									}
+									++tmp;
+								}
+								if (found) {
+									break;
+								}
 							}
-							if ((*tter)->type & T_MAPPING || (*tter)->tag[0] == grammar->mapping_prefix) {
-								mappings->push_back(*tter);
+							if (rule.flags & RF_AFTER) {
+								std::advance(it, spot_tags->size());
 							}
-							else {
-								hash = addTagToReading(*cReading, *tter);
+							if (it != cReading->tags_list.end()) {
+								INSERT_TAGLIST_TO_READING(it, *theTags, *cReading);
+								did_insert = true;
 							}
-							if (updateValidRules(rules, intersects, hash, reading)) {
-								iter_rules = intersects.find(rule.number);
-								iter_rules_end = intersects.end();
-							}
+						}
+
+						if (!did_insert) {
+							APPEND_TAGLIST_TO_READING(*theTags, *cReading);
 						}
 						if (!mappings->empty()) {
 							splitMappings(mappings, *cohort, *cReading, true);
@@ -1515,34 +1621,33 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 					}
 					else if (type == K_SETPARENT || type == K_SETCHILD) {
 						int32_t orgoffset = rule.dep_target->offset;
-						BOOST_AUTO(seen_targets, ss_u32sv.get());
+						auto seen_targets = ss_u32sv.get();
 
-						seen_barrier = false;
 						bool attached = false;
 						Cohort *target = cohort;
 						while (!attached) {
-							BOOST_AUTO(utags, ss_utags.get());
-							BOOST_AUTO(usets, ss_u32sv.get());
+							auto utags = ss_utags.get();
+							auto usets = ss_u32sv.get();
 							*utags = *unif_tags;
 							*usets = *unif_sets;
 
 							Cohort *attach = 0;
 							seen_targets->insert(target->global_number);
 							dep_deep_seen.clear();
-							tmpl_cntxs.clear();
-							tmpl_cntx_pos = 0;
+							tmpl_cntx.clear();
 							attach_to = 0;
+							seen_barrier = false;
 							if (runContextualTest(target->parent, target->local_number, rule.dep_target, &attach) && attach) {
+								bool break_after = seen_barrier || (rule.flags & RF_NEAREST);
 								if (attach_to) {
 									attach = attach_to;
 								}
 								bool good = true;
-								foreach (it, rule.dep_tests) {
+								for (auto it : rule.dep_tests) {
 									mark = attach;
 									dep_deep_seen.clear();
-									tmpl_cntxs.clear();
-									tmpl_cntx_pos = 0;
-									test_good = (runContextualTest(attach->parent, attach->local_number, *it) != 0);
+									tmpl_cntx.clear();
+									test_good = (runContextualTest(attach->parent, attach->local_number, it) != 0);
 									if (!test_good) {
 										good = test_good;
 										break;
@@ -1558,14 +1663,14 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 									}
 									if (attached) {
 										index_ruleCohort_no.clear();
-										reading.hit_by.push_back(rule.number);
+										TRACE;
 										reading.noprint = false;
 										has_dep = true;
 										readings_changed = true;
 										break;
 									}
 								}
-								if (seen_barrier || (rule.flags & RF_NEAREST)) {
+								if (break_after) {
 									break;
 								}
 								if (seen_targets->count(attach->global_number)) {
@@ -1595,20 +1700,18 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 						// ToDo: ** tests will not correctly work for MOVE/SWITCH; cannot move cohorts between windows
 						Cohort *attach = 0;
 						dep_deep_seen.clear();
-						tmpl_cntxs.clear();
-						tmpl_cntx_pos = 0;
+						tmpl_cntx.clear();
 						attach_to = 0;
 						if (runContextualTest(&current, c, rule.dep_target, &attach) && attach && cohort->parent == attach->parent) {
 							if (attach_to) {
 								attach = attach_to;
 							}
 							bool good = true;
-							foreach (it, rule.dep_tests) {
+							for (auto it : rule.dep_tests) {
 								mark = attach;
 								dep_deep_seen.clear();
-								tmpl_cntxs.clear();
-								tmpl_cntx_pos = 0;
-								test_good = (runContextualTest(attach->parent, attach->local_number, *it) != 0);
+								tmpl_cntx.clear();
+								test_good = (runContextualTest(attach->parent, attach->local_number, it) != 0);
 								if (!test_good) {
 									good = test_good;
 									break;
@@ -1627,46 +1730,113 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 								}
 								current.cohorts[cohort->local_number] = attach;
 								current.cohorts[attach->local_number] = cohort;
-								foreach (iter, cohort->readings) {
-									(*iter)->hit_by.push_back(rule.number);
+								for (auto iter : cohort->readings) {
+									iter->hit_by.push_back(rule.number);
 								}
-								foreach (iter, attach->readings) {
-									(*iter)->hit_by.push_back(rule.number);
+								for (auto iter : attach->readings) {
+									iter->hit_by.push_back(rule.number);
 								}
 							}
 							else {
-								CohortVector cohorts;
-								if (rule.childset1) {
-									for (CohortVector::iterator iter = current.cohorts.begin(); iter != current.cohorts.end();) {
-										if (isChildOf(*iter, cohort) && doesSetMatchCohortNormal(**iter, rule.childset1)) {
-											cohorts.push_back(*iter);
-											iter = current.cohorts.erase(iter);
+								CohortSet edges;
+								if (rule.childset2) {
+									for (auto iter : current.cohorts) {
+										// Always consider the anchor cohort a match
+										if (iter->global_number == attach->global_number) {
+											edges.insert(iter);
 										}
-										else {
-											++iter;
+										else if (iter->dep_parent == attach->global_number && doesSetMatchCohortNormal(*iter, rule.childset2)) {
+											edges.insert(iter);
 										}
 									}
+									CohortSet more;
+									for (auto iter : current.cohorts) {
+										for (auto edge : edges) {
+											// Do not grab the whole tree from the root, in case WithChild is not (*)
+											if (edge->global_number == attach->global_number) {
+												continue;
+											}
+											if (isChildOf(iter, edge)) {
+												more.insert(iter);
+											}
+										}
+									}
+									edges.insert(more.begin(), more.end());
 								}
 								else {
-									cohorts.push_back(cohort);
-									current.cohorts.erase(current.cohorts.begin() + cohort->local_number);
+									edges.insert(attach);
+								}
+
+								CohortSet cohorts;
+								if (rule.childset1) {
+									for (auto iter : current.cohorts) {
+										// Always consider the target cohort a match
+										if (iter->global_number == cohort->global_number) {
+											cohorts.insert(iter);
+										}
+										else if (iter->dep_parent == cohort->global_number && doesSetMatchCohortNormal(*iter, rule.childset1)) {
+											cohorts.insert(iter);
+										}
+									}
+									CohortSet more;
+									for (auto iter : current.cohorts) {
+										for (auto cht : cohorts) {
+											// Do not grab the whole tree from the root, in case WithChild is not (*)
+											if (cht->global_number == cohort->global_number) {
+												continue;
+											}
+											if (isChildOf(iter, cht)) {
+												more.insert(iter);
+											}
+										}
+									}
+									cohorts.insert(more.begin(), more.end());
+								}
+								else {
+									cohorts.insert(cohort);
+								}
+
+								bool need_clean = false;
+								for (auto iter :cohorts) {
+									if (edges.count(iter)) {
+										need_clean = true;
+										break;
+									}
+								}
+
+								if (need_clean) {
+									if (isChildOf(cohort, attach)) {
+										edges.erase(cohorts.rbegin(), cohorts.rend());
+									}
+									else /* if (isChildOf(attach, cohort)) */ {
+										cohorts.erase(edges.rbegin(), edges.rend());
+									}
+								}
+								if (cohorts.empty() || edges.empty()) {
+									break;
+								}
+
+								reverse_foreach (iter, cohorts) {
+									current.cohorts.erase(current.cohorts.begin() + (*iter)->local_number);
 								}
 
 								foreach (iter, current.cohorts) {
 									(*iter)->local_number = std::distance(current.cohorts.begin(), iter);
 								}
 
-								CohortVector edges;
-								if (rule.childset2) {
-									foreach (iter, current.cohorts) {
-										if (isChildOf(*iter, attach) && doesSetMatchCohortNormal(**iter, rule.childset2)) {
-											edges.push_back(*iter);
+								for (auto iter : edges) {
+									if (iter->parent != cohort->parent) {
+										u_fprintf(ux_stderr, "Error: Move/Switch on line %u tried to move across window boundaries.\n", rule.line);
+										CG3Quit(1);
+									}
+									for (auto cohort : cohorts) {
+										if (iter == cohort) {
+											u_fprintf(ux_stderr, "Error: Move/Switch on line %u tried to move to a removed position.\n", rule.line);
+											CG3Quit(1);
 										}
 									}
 								}
-								else {
-									edges.push_back(attach);
-								}
+
 								uint32_t spot = 0;
 								if (type == K_MOVE_BEFORE) {
 									spot = edges.front()->local_number;
@@ -1678,9 +1848,14 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 									spot = edges.back()->local_number + 1;
 								}
 
+								if (spot > current.cohorts.size()) {
+									u_fprintf(ux_stderr, "Error: Move/Switch on line %u tried to move out of bounds.\n", rule.line);
+									CG3Quit(1);
+								}
+
 								while (!cohorts.empty()) {
-									foreach (iter, cohorts.back()->readings) {
-										(*iter)->hit_by.push_back(rule.number);
+									for (auto iter : cohorts.back()->readings) {
+										iter->hit_by.push_back(rule.number);
 									}
 									current.cohorts.insert(current.cohorts.begin() + spot, cohorts.back());
 									cohorts.pop_back();
@@ -1704,10 +1879,10 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 								attach = attach_to;
 							}
 							bool good = true;
-							foreach (it, rule.dep_tests) {
+							for (auto it : rule.dep_tests) {
 								mark = attach;
 								dep_deep_seen.clear();
-								test_good = (runContextualTest(attach->parent, attach->local_number, *it) != 0);
+								test_good = (runContextualTest(attach->parent, attach->local_number, it) != 0);
 								if (!test_good) {
 									good = test_good;
 									break;
@@ -1716,27 +1891,27 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 							if (good) {
 								swapper<Cohort*> sw((rule.flags & RF_REVERSE) != 0, attach, cohort);
 								bool rel_did_anything = false;
-								BOOST_AUTO(theTags, ss_taglist.get());
+								auto theTags = ss_taglist.get();
 								getTagList(*rule.maplist, theTags);
 
-								foreach (tter, *theTags) {
+								for (auto tter : *theTags) {
 									if (type == K_ADDRELATION) {
 										attach->type |= CT_RELATED;
 										cohort->type |= CT_RELATED;
-										rel_did_anything |= cohort->addRelation((*tter)->hash, attach->global_number);
+										rel_did_anything |= cohort->addRelation(tter->hash, attach->global_number);
 									}
 									else if (type == K_SETRELATION) {
 										attach->type |= CT_RELATED;
 										cohort->type |= CT_RELATED;
-										rel_did_anything |= cohort->setRelation((*tter)->hash, attach->global_number);
+										rel_did_anything |= cohort->setRelation(tter->hash, attach->global_number);
 									}
 									else {
-										rel_did_anything |= cohort->remRelation((*tter)->hash, attach->global_number);
+										rel_did_anything |= cohort->remRelation(tter->hash, attach->global_number);
 									}
 								}
 								if (rel_did_anything) {
 									index_ruleCohort_no.clear();
-									reading.hit_by.push_back(rule.number);
+									TRACE;
 									reading.noprint = false;
 									readings_changed = true;
 								}
@@ -1747,20 +1922,18 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 					else if (type == K_ADDRELATIONS || type == K_SETRELATIONS || type == K_REMRELATIONS) {
 						Cohort *attach = 0;
 						dep_deep_seen.clear();
-						tmpl_cntxs.clear();
-						tmpl_cntx_pos = 0;
+						tmpl_cntx.clear();
 						attach_to = 0;
 						if (runContextualTest(&current, c, rule.dep_target, &attach) && attach) {
 							if (attach_to) {
 								attach = attach_to;
 							}
 							bool good = true;
-							foreach (it, rule.dep_tests) {
+							for (auto it : rule.dep_tests) {
 								mark = attach;
 								dep_deep_seen.clear();
-								tmpl_cntxs.clear();
-								tmpl_cntx_pos = 0;
-								test_good = (runContextualTest(attach->parent, attach->local_number, *it) != 0);
+								tmpl_cntx.clear();
+								test_good = (runContextualTest(attach->parent, attach->local_number, it) != 0);
 								if (!test_good) {
 									good = test_good;
 									break;
@@ -1770,41 +1943,41 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 								swapper<Cohort*> sw((rule.flags & RF_REVERSE) != 0, attach, cohort);
 								bool rel_did_anything = false;
 
-								BOOST_AUTO(sublist, ss_taglist.get());
+								auto sublist = ss_taglist.get();
 								getTagList(*rule.sublist, sublist);
 
-								BOOST_AUTO(maplist, ss_taglist.get());
+								auto maplist = ss_taglist.get();
 								getTagList(*rule.maplist, maplist);
 
-								foreach (tter, *maplist) {
+								for (auto tter : *maplist) {
 									if (type == K_ADDRELATIONS) {
 										cohort->type |= CT_RELATED;
-										rel_did_anything |= cohort->addRelation((*tter)->hash, attach->global_number);
+										rel_did_anything |= cohort->addRelation(tter->hash, attach->global_number);
 									}
 									else if (type == K_SETRELATIONS) {
 										cohort->type |= CT_RELATED;
-										rel_did_anything |= cohort->setRelation((*tter)->hash, attach->global_number);
+										rel_did_anything |= cohort->setRelation(tter->hash, attach->global_number);
 									}
 									else {
-										rel_did_anything |= cohort->remRelation((*tter)->hash, attach->global_number);
+										rel_did_anything |= cohort->remRelation(tter->hash, attach->global_number);
 									}
 								}
-								foreach (tter, *sublist) {
+								for (auto tter : *sublist) {
 									if (type == K_ADDRELATIONS) {
 										attach->type |= CT_RELATED;
-										rel_did_anything |= attach->addRelation((*tter)->hash, cohort->global_number);
+										rel_did_anything |= attach->addRelation(tter->hash, cohort->global_number);
 									}
 									else if (type == K_SETRELATIONS) {
 										attach->type |= CT_RELATED;
-										rel_did_anything |= attach->setRelation((*tter)->hash, cohort->global_number);
+										rel_did_anything |= attach->setRelation(tter->hash, cohort->global_number);
 									}
 									else {
-										rel_did_anything |= attach->remRelation((*tter)->hash, cohort->global_number);
+										rel_did_anything |= attach->remRelation(tter->hash, cohort->global_number);
 									}
 								}
 								if (rel_did_anything) {
 									index_ruleCohort_no.clear();
-									reading.hit_by.push_back(rule.number);
+									TRACE;
 									reading.noprint = false;
 									readings_changed = true;
 								}
@@ -1858,6 +2031,7 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 				if (!(rule.flags & RF_NOITERATE) && section_max_count != 1) {
 					section_did_something = true;
 				}
+				rule_did_something = true;
 				cohort->type &= ~CT_NUM_CURRENT;
 			}
 
@@ -1884,7 +2058,19 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 			rule.total_time += elapsed(tmp, tstamp);
 		}
 
+		if (rule_did_something) {
+			if (trace_rules.contains(rule.line)) {
+				retval |= RV_TRACERULE;
+			}
+		}
 		if (delimited) {
+			break;
+		}
+		if (rule_did_something && (rule.flags & RF_REPEAT)) {
+			index_ruleCohort_no.clear();
+			goto repeat_rule;
+		}
+		if (retval & RV_TRACERULE) {
 			break;
 		}
 	}
@@ -1901,7 +2087,7 @@ uint32_t GrammarApplicator::runRulesOnSingleWindow(SingleWindow& current, const 
 uint32_t GrammarApplicator::runGrammarOnSingleWindow(SingleWindow& current) {
 	if (!grammar->before_sections.empty() && !no_before_sections) {
 		uint32_t rv = runRulesOnSingleWindow(current, runsections[-1]);
-		if (rv & RV_DELIMITED) {
+		if (rv & (RV_DELIMITED | RV_TRACERULE)) {
 			return rv;
 		}
 	}
@@ -1911,7 +2097,7 @@ uint32_t GrammarApplicator::runGrammarOnSingleWindow(SingleWindow& current) {
 		// Caveat: This may look as if it is not recursing previous sections, but those rules are preprocessed into the successive sections so they are actually run.
 		RSType::iterator iter = runsections.begin();
 		RSType::iterator iter_end = runsections.end();
-		for (; iter != iter_end;) {
+		for (size_t pass = 0; iter != iter_end; ++pass) {
 			if (iter->first < 0 || (section_max_count && counter[iter->first] >= section_max_count)) {
 				++iter;
 				continue;
@@ -1922,18 +2108,31 @@ uint32_t GrammarApplicator::runGrammarOnSingleWindow(SingleWindow& current) {
 			}
 			rv = runRulesOnSingleWindow(current, iter->second);
 			++counter[iter->first];
-			if (rv & RV_DELIMITED) {
+			if (rv & (RV_DELIMITED | RV_TRACERULE)) {
 				return rv;
 			}
 			if (!(rv & RV_SOMETHING)) {
 				++iter;
+				pass = 0;
+			}
+			if (pass >= 1000) {
+				u_fprintf(ux_stderr, "Warning: Endless loop detected before input line %u. Window contents was:", numLines);
+				UString tag;
+				for (size_t i = 1; i < current.cohorts.size(); ++i) {
+					Tag *t = current.cohorts[i]->wordform;
+					tag.assign(t->tag.begin() + 2, t->tag.begin() + t->tag.size() - 2);
+					u_fprintf(ux_stderr, " %S", tag.c_str());
+				}
+				u_fprintf(ux_stderr, "\n");
+				u_fflush(ux_stderr);
+				break;
 			}
 		}
 	}
 
 	if (!grammar->after_sections.empty() && !no_after_sections) {
 		uint32_t rv = runRulesOnSingleWindow(current, runsections[-2]);
-		if (rv & RV_DELIMITED) {
+		if (rv & (RV_DELIMITED | RV_TRACERULE)) {
 			return rv;
 		}
 	}
@@ -1945,11 +2144,11 @@ void GrammarApplicator::runGrammarOnWindow() {
 	SingleWindow *current = gWindow->current;
 	did_final_enclosure = false;
 
-	foreach (vit, current->variables_set) {
-		variables[vit->first] = vit->second;
+	for (auto vit : current->variables_set) {
+		variables[vit.first] = vit.second;
 	}
-	foreach (vit, current->variables_rem) {
-		variables.erase(*vit);
+	for (auto vit : current->variables_rem) {
+		variables.erase(vit);
 	}
 
 	if (has_dep) {
@@ -1957,8 +2156,7 @@ void GrammarApplicator::runGrammarOnWindow() {
 		gWindow->dep_map.clear();
 		gWindow->dep_window.clear();
 		if (!input_eof && !gWindow->next.empty() && gWindow->next.back()->cohorts.size() > 1) {
-			foreach (iter, gWindow->next.back()->cohorts) {
-				Cohort *cohort = *iter;
+			for (auto cohort : gWindow->next.back()->cohorts) {
 				gWindow->dep_window[cohort->global_number] = cohort;
 			}
 		}
@@ -2006,11 +2204,11 @@ void GrammarApplicator::runGrammarOnWindow() {
 						++left;
 					}
 					current->cohorts.resize(current->cohorts.size() - encs.size());
-					foreach (eiter, encs) {
-						(*eiter)->type |= CT_ENCLOSED;
+					for (auto eiter : encs) {
+						eiter->type |= CT_ENCLOSED;
 					}
-					foreach (eiter2, c->enclosed) {
-						encs.push_back(*eiter2);
+					for (auto eiter2 : c->enclosed) {
+						encs.push_back(eiter2);
 					}
 					c->enclosed = encs;
 					current->has_enclosures = true;
@@ -2035,7 +2233,15 @@ label_runGrammarOnWindow_begin:
 
 	++pass;
 	if (pass > 1000) {
-		u_fprintf(ux_stderr, "Warning: Endless loop detected before input line %u - will try to break it.\n", numLines);
+		u_fprintf(ux_stderr, "Warning: Endless loop detected before input line %u. Window contents was:", numLines);
+		UString tag;
+		for (size_t i = 1; i < current->cohorts.size(); ++i) {
+			Tag *t = current->cohorts[i]->wordform;
+			tag.assign(t->tag.begin() + 2, t->tag.begin() + t->tag.size() - 2);
+			u_fprintf(ux_stderr, " %S", tag.c_str());
+		}
+		u_fprintf(ux_stderr, "\n");
+		u_fflush(ux_stderr);
 		return;
 	}
 
@@ -2044,8 +2250,8 @@ label_runGrammarOnWindow_begin:
 		size_t nc = current->cohorts.size();
 		for (size_t i = 0; i < nc; ++i) {
 			Cohort *c = current->cohorts[i];
-			foreach (rit, c->readings) {
-				(*rit)->hit_by.push_back(hitpass);
+			for (auto rit : c->readings) {
+				rit->hit_by.push_back(hitpass);
 			}
 		}
 	}
@@ -2055,6 +2261,7 @@ label_runGrammarOnWindow_begin:
 		goto label_runGrammarOnWindow_begin;
 	}
 
+label_unpackEnclosures:
 	if (!grammar->parentheses.empty() && current->has_enclosures) {
 		size_t nc = current->cohorts.size();
 		for (size_t i = 0; i < nc; ++i) {
@@ -2077,6 +2284,9 @@ label_runGrammarOnWindow_begin:
 				par_left_pos = i + 1;
 				par_right_pos = i + ne;
 				c->enclosed.clear();
+				if (rv & RV_TRACERULE) {
+					goto label_unpackEnclosures;
+				}
 				goto label_runGrammarOnWindow_begin;
 			}
 		}
@@ -2086,8 +2296,14 @@ label_runGrammarOnWindow_begin:
 			par_left_pos = 0;
 			par_right_pos = 0;
 			did_final_enclosure = true;
+			if (rv & RV_TRACERULE) {
+				goto label_unpackEnclosures;
+			}
 			goto label_runGrammarOnWindow_begin;
 		}
 	}
 }
 }
+
+// This helps the all_vislcg3.cpp profiling builds
+#undef TRACE

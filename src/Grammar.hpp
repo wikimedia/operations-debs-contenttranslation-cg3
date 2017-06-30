@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2016, GrammarSoft ApS
+* Copyright (C) 2007-2017, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -56,7 +56,7 @@ public:
 	std::vector<Set*> sets_list;
 	SetSet sets_all;
 	uint32FlatHashMap sets_by_name;
-	typedef stdext::hash_map<UString, uint32_t> set_name_seeds_t;
+	typedef std::unordered_map<UString, uint32_t, hash_ustring> set_name_seeds_t;
 	set_name_seeds_t set_name_seeds;
 	Setuint32HashMap sets_by_contents;
 	uint32FlatHashMap set_alias;
@@ -70,15 +70,15 @@ public:
 	typedef TagSortedVector icase_tags_t;
 	icase_tags_t icase_tags;
 
-	typedef stdext::hash_map<uint32_t, ContextualTest*> contexts_t;
+	typedef std::unordered_map<uint32_t, ContextualTest*> contexts_t;
 	contexts_t templates;
 	contexts_t contexts;
 
-	typedef stdext::hash_map<uint32_t, uint32IntervalVector> rules_by_set_t;
+	typedef std::unordered_map<uint32_t, uint32IntervalVector> rules_by_set_t;
 	rules_by_set_t rules_by_set;
-	typedef stdext::hash_map<uint32_t, uint32IntervalVector> rules_by_tag_t;
+	typedef std::unordered_map<uint32_t, uint32IntervalVector> rules_by_tag_t;
 	rules_by_tag_t rules_by_tag;
-	typedef stdext::hash_map<uint32_t, boost::dynamic_bitset<> > sets_by_tag_t;
+	typedef std::unordered_map<uint32_t, boost::dynamic_bitset<> > sets_by_tag_t;
 	sets_by_tag_t sets_by_tag;
 
 	uint32IntervalVector *rules_any;
@@ -113,6 +113,7 @@ public:
 	void addSetToList(Set *s);
 	void allocateDummySet();
 	uint32_t removeNumericTags(uint32_t s);
+	void getTags(const Set& set, std::set<TagVector>& rv);
 
 	void addAnchor(const UChar *to, uint32_t at, bool primary = false);
 
