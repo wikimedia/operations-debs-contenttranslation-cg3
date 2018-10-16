@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -26,9 +26,9 @@
 
 namespace CG3 {
 
-GrammarWriter::GrammarWriter(Grammar& res, UFILE *ux_err) {
+GrammarWriter::GrammarWriter(Grammar& res, std::ostream& ux_err) {
 	statistics = false;
-	ux_stderr = ux_err;
+	ux_stderr = &ux_err;
 	grammar = &res;
 }
 
@@ -36,7 +36,7 @@ GrammarWriter::~GrammarWriter() {
 	grammar = 0;
 }
 
-void GrammarWriter::printSet(UFILE *output, const Set& curset) {
+void GrammarWriter::printSet(std::ostream& output, const Set& curset) {
 	if (used_sets.find(curset.number) != used_sets.end()) {
 		return;
 	}
@@ -71,8 +71,8 @@ void GrammarWriter::printSet(UFILE *output, const Set& curset) {
 	}
 	else {
 		used_sets.insert(curset.number);
-		for (uint32_t i = 0; i < curset.sets.size(); i++) {
-			printSet(output, *(grammar->sets_list[curset.sets[i]]));
+		for (auto s : curset.sets) {
+			printSet(output, *(grammar->sets_list[s]));
 		}
 		if (statistics) {
 			if (ceil(curset.total_time) == floor(curset.total_time)) {
@@ -82,7 +82,7 @@ void GrammarWriter::printSet(UFILE *output, const Set& curset) {
 				u_fprintf(output, "#Set Matched: %u ; NoMatch: %u ; TotalTime: %f\n", curset.num_match, curset.num_fail, curset.total_time);
 			}
 		}
-		const UChar *n = curset.name.c_str();
+		const UChar* n = curset.name.c_str();
 		if ((n[0] == '$' && n[1] == '$') || (n[0] == '&' && n[1] == '&')) {
 			u_fprintf(output, "# ");
 		}
@@ -95,7 +95,7 @@ void GrammarWriter::printSet(UFILE *output, const Set& curset) {
 	}
 }
 
-int GrammarWriter::writeGrammar(UFILE *output) {
+int GrammarWriter::writeGrammar(std::ostream& output) {
 	if (!output) {
 		u_fprintf(ux_stderr, "Error: Output is null - cannot write to nothing!\n");
 		CG3Quit(1);
@@ -134,9 +134,8 @@ int GrammarWriter::writeGrammar(UFILE *output) {
 
 	if (!grammar->preferred_targets.empty()) {
 		u_fprintf(output, "PREFERRED-TARGETS = ");
-		uint32Vector::const_iterator iter;
-		for (iter = grammar->preferred_targets.begin(); iter != grammar->preferred_targets.end(); iter++) {
-			printTag(output, *(grammar->single_tags.find(*iter)->second));
+		for (auto iter : grammar->preferred_targets) {
+			printTag(output, *(grammar->single_tags.find(iter)->second));
 			u_fprintf(output, " ");
 		}
 		u_fprintf(output, " ;\n");
@@ -233,7 +232,7 @@ int GrammarWriter::writeGrammar(UFILE *output) {
 }
 
 // ToDo: Make printRule do the right thing for MOVE_ and ADDCOHORT_ BEFORE|AFTER
-void GrammarWriter::printRule(UFILE *to, const Rule& rule) {
+void GrammarWriter::printRule(std::ostream& to, const Rule& rule) {
 	if (statistics) {
 		if (ceil(rule.total_time) == floor(rule.total_time)) {
 			u_fprintf(to, "\n#Rule Matched: %u ; NoMatch: %u ; TotalTime: %.0f\n", rule.num_match, rule.num_fail, rule.total_time);
@@ -283,19 +282,32 @@ void GrammarWriter::printRule(UFILE *to, const Rule& rule) {
 		u_fprintf(to, ") ");
 	}
 
+	if (rule.type == K_SETPARENT || rule.type == K_SETCHILD || rule.type == K_ADDRELATIONS || rule.type == K_ADDRELATION || rule.type == K_SETRELATIONS || rule.type == K_SETRELATION || rule.type == K_REMRELATIONS || rule.type == K_REMRELATION) {
+		u_fprintf(to, "TO ");
+	}
+	else if (rule.type == K_MOVE_AFTER) {
+		u_fprintf(to, "AFTER ");
+	}
+	else if (rule.type == K_MOVE_BEFORE) {
+		u_fprintf(to, "BEFORE ");
+	}
+	else if (rule.type == K_SWITCH || rule.type == K_MERGECOHORTS) {
+		u_fprintf(to, "WITH ");
+	}
+
 	if (rule.dep_target) {
-		u_fprintf(to, "TO (");
+		u_fprintf(to, "(");
 		printContextualTest(to, *(rule.dep_target));
 		u_fprintf(to, ") ");
-		for (auto it : rule.dep_tests) {
-			u_fprintf(to, "(");
-			printContextualTest(to, *it);
-			u_fprintf(to, ") ");
-		}
+	}
+	for (auto it : rule.dep_tests) {
+		u_fprintf(to, "(");
+		printContextualTest(to, *it);
+		u_fprintf(to, ") ");
 	}
 }
 
-void GrammarWriter::printContextualTest(UFILE *to, const ContextualTest& test) {
+void GrammarWriter::printContextualTest(std::ostream& to, const ContextualTest& test) {
 	if (statistics) {
 		if (ceil(test.total_time) == floor(test.total_time)) {
 			u_fprintf(to, "\n#Test Matched: %u ; NoMatch: %u ; TotalTime: %.0f\n", test.num_match, test.num_fail, test.total_time);
@@ -352,6 +364,12 @@ void GrammarWriter::printContextualTest(UFILE *to, const ContextualTest& test) {
 		}
 		if (test.pos & POS_DEP_SIBLING) {
 			u_fprintf(to, "s");
+		}
+		if (test.pos & POS_SELF) {
+			u_fprintf(to, "S");
+		}
+		if (test.pos & POS_NO_BARRIER) {
+			u_fprintf(to, "N");
 		}
 
 		if (test.pos & POS_UNKNOWN) {
@@ -420,8 +438,8 @@ void GrammarWriter::printContextualTest(UFILE *to, const ContextualTest& test) {
 	}
 }
 
-void GrammarWriter::printTag(UFILE *to, const Tag& tag) {
+void GrammarWriter::printTag(std::ostream& to, const Tag& tag) {
 	UString str = tag.toUString(true);
-	u_file_write(str.c_str(), str.length(), to);
+	u_fprintf(to, "%S", str.c_str());
 }
 }

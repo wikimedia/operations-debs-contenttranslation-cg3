@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -28,36 +28,31 @@
 namespace CG3 {
 class ApertiumApplicator : public virtual GrammarApplicator {
 public:
-	ApertiumApplicator(UFILE *ux_err);
+	ApertiumApplicator(std::ostream& ux_err);
 
-	void runGrammarOnText(istream& input, UFILE *output);
+	void runGrammarOnText(std::istream& input, std::ostream& output);
 
 	bool wordform_case;
 	bool print_word_forms;
 	bool print_only_first;
 	void setNullFlush(bool pNullFlush);
 
-	void testPR(UFILE *output);
+	void testPR(std::ostream& output);
 
 protected:
 	bool nullFlush;
 	bool runningWithNullFlush;
 
-	void printReading(Reading *reading, UFILE *output);
-	void printSingleWindow(SingleWindow *window, UFILE *output);
+	void printReading(Reading* reading, std::ostream& output);
+	void printSingleWindow(SingleWindow* window, std::ostream& output);
 
-	void runGrammarOnTextWrapperNullFlush(istream& input, UFILE *output);
+	void runGrammarOnTextWrapperNullFlush(std::istream& input, std::ostream& output);
 
-	UChar u_fgetc_wrapper(istream& input);
-	UConverter *fgetc_converter;
-	char fgetc_inputbuf[5];
-	UChar fgetc_outputbuf[5];
-	UErrorCode fgetc_error;
 	void mergeMappings(Cohort& cohort);
 
 private:
-	void processReading(Reading *cReading, const UChar *reading_string);
-	void processReading(Reading *cReading, const UString& reading_string);
+	void processReading(Reading* cReading, const UChar* reading_string);
+	void processReading(Reading* cReading, const UString& reading_string);
 };
 }
 

@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 rm -f T*/diff*.txt
 rm -f T*/output*.txt
 rm -f T*/stdout*.txt

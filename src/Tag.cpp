@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -26,7 +26,7 @@
 
 namespace CG3 {
 
-UFILE *Tag::dump_hashes_out = 0;
+std::ostream* Tag::dump_hashes_out = 0;
 
 Tag::Tag()
   : comparison_op(OP_NOP)
@@ -89,12 +89,12 @@ Tag::~Tag() {
 	}
 }
 
-void Tag::parseTagRaw(const UChar *to, Grammar *grammar) {
+void Tag::parseTagRaw(const UChar* to, Grammar* grammar) {
 	type = 0;
 	size_t length = u_strlen(to);
 	assert(length && "parseTagRaw() will not work with empty strings.");
 
-	const UChar *tmp = to;
+	const UChar* tmp = to;
 
 	if (tmp[0] && (tmp[0] == '"' || tmp[0] == '<')) {
 		if ((tmp[0] == '"' && tmp[length - 1] == '"') || (tmp[0] == '<' && tmp[length - 1] == '>')) {
@@ -114,7 +114,7 @@ void Tag::parseTagRaw(const UChar *to, Grammar *grammar) {
 
 	for (auto iter : grammar->regex_tags) {
 		UErrorCode status = U_ZERO_ERROR;
-		uregex_setText(iter, tag.c_str(), tag.size(), &status);
+		uregex_setText(iter, tag.c_str(), static_cast<int32_t>(tag.size()), &status);
 		if (status == U_ZERO_ERROR) {
 			if (uregex_matches(iter, 0, &status)) {
 				type |= T_TEXTUAL;
@@ -123,7 +123,7 @@ void Tag::parseTagRaw(const UChar *to, Grammar *grammar) {
 	}
 	for (auto iter : grammar->icase_tags) {
 		UErrorCode status = U_ZERO_ERROR;
-		if (u_strCaseCompare(tag.c_str(), tag.size(), iter->tag.c_str(), iter->tag.size(), U_FOLD_CASE_DEFAULT, &status) == 0) {
+		if (u_strCaseCompare(tag.c_str(), static_cast<int32_t>(tag.size()), iter->tag.c_str(), static_cast<int32_t>(iter->tag.size()), U_FOLD_CASE_DEFAULT, &status) == 0) {
 			type |= T_TEXTUAL;
 		}
 	}
@@ -149,7 +149,7 @@ void Tag::parseTagRaw(const UChar *to, Grammar *grammar) {
 		UChar relname[256];
 		if (u_sscanf(tag.c_str(), "R:%[^:]:%i", &relname, &dep_parent) == 2 && dep_parent != 0) {
 			type |= T_RELATION;
-			Tag *reltag = grammar->allocateTag(relname);
+			Tag* reltag = grammar->allocateTag(relname);
 			comparison_hash = reltag->hash;
 		}
 	}
@@ -342,15 +342,15 @@ UString Tag::toUString(bool escape) const {
 	}
 
 	if (escape) {
-		for (size_t i = 0; i < tag.size(); ++i) {
-			if (tag[i] == '\\' || tag[i] == '(' || tag[i] == ')' || tag[i] == ';' || tag[i] == '#') {
+		for (auto c : tag) {
+			if (c == '\\' || c == '(' || c == ')' || c == ';' || c == '#') {
 				str += '\\';
 			}
-			str += tag[i];
+			str += c;
 		}
 	}
 	else {
-		str + tag;
+		str += tag;
 	}
 
 	if (type & (T_CASE_INSENSITIVE | T_REGEXP) && tag[0] != '"') {

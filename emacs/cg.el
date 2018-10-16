@@ -4,7 +4,7 @@
 
 ;; Author: Kevin Brubeck Unhammer <unhammer@fsfe.org>
 ;; Version: 0.3.0
-;; Url: http://beta.visl.sdu.dk/constraint_grammar.html
+;; Url: https://visl.sdu.dk/constraint_grammar.html
 ;; Keywords: languages
 
 ;; This file is not part of GNU Emacs.
@@ -57,7 +57,7 @@
 ;; - run vislcg3 --show-unused-sets and buttonise with line numbers (like Occur does)
 ;; - indentation function (based on prolog again?)
 ;; - the rest of the keywords
-;; - http://beta.visl.sdu.dk/cg3/single/#regex-icase
+;; - https://visl.sdu.dk/cg3/single/#regex-icase
 ;; - keyword tab-completion
 ;; - `font-lock-syntactic-keywords' is obsolete since 24.1
 ;; - goto-set/list
@@ -167,7 +167,10 @@ Don't change without re-evaluating `cg-kw-re' (or all of cg.el).")
   "Rule-starter keywords for indentation, highlighting etc.
 Don't change without re-evaluating `cg-kw-re' (or all of cg.el)." )
 (defconst cg-kw-rule-re (regexp-opt cg-kw-rule-list)
-    "Regexp version of `cg-kw-rule-list'.")
+  "Regexp version of `cg-kw-rule-list'.")
+(defconst cg-kw-trace-rule-re (regexp-opt (append '("ADDCOHORT-AFTER" "ADDCOHORT-BEFORE")
+                                                  cg-kw-rule-list))
+  "Regexp version of `cg-kw-rule-list' with extra keywords used only in tracing.")
 (defconst cg-kw-re (regexp-opt (append cg-kw-set-list cg-kw-rule-list))
   "Regexp combination of `cg-kw-rule-list' and `cg-kw-set-list'.")
 
@@ -197,7 +200,7 @@ Don't change without re-evaluating `cg-kw-re' (or all of cg.el)." )
 			     "SUB"
 			     "OUTPUT")
   "Rule flags used for highlighting.
-from http://visl.sdu.dk/svn/visl/tools/vislcg3/trunk/src/Strings.cpp
+from https://visl.sdu.dk/svn/visl/tools/vislcg3/trunk/src/Strings.cpp
 Don't change without re-evaluating the file.")
 (defconst cg-kw-context-flags '("NOT"
 				"NEGATE"
@@ -678,7 +681,7 @@ from, otherwise all CG buffers share one input buffer."
   (list cg--file))
 
 (defconst cg-output-regexp-alist
-  `((,(format "%s:\\([^ \n\t:]+\\)\\(?::[^ \n\t]+\\)?" cg-kw-rule-re)
+  `((,(format "%s:\\([^ \n\t:]+\\)\\(?::[^ \n\t]+\\)?" cg-kw-trace-rule-re)
      ,#'cg-get-file 1 nil 1)
     ("^\\([^:]*: \\)?Warning: .*?line \\([0-9]+\\).*"
      ,#'cg-get-file 2 nil 1)

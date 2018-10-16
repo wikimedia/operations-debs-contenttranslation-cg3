@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -45,7 +45,7 @@ enum {
 
 class Set {
 public:
-	static UFILE *dump_hashes_out;
+	static std::ostream* dump_hashes_out;
 
 	uint8_t type;
 	uint32_t line;
@@ -69,7 +69,7 @@ public:
 	}
 
 	void setName(uint32_t to = 0);
-	void setName(const UChar *to);
+	void setName(const UChar* to);
 	void setName(const UString& to);
 
 	bool empty() const;

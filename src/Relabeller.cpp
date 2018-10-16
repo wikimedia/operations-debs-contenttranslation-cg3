@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -26,17 +26,17 @@
 
 namespace CG3 {
 
-Relabeller::Relabeller(Grammar& res, const Grammar& relabels, UFILE *ux_err)
-  : ux_stderr(ux_err)
+Relabeller::Relabeller(Grammar& res, const Grammar& relabels, std::ostream& ux_err)
+  : ux_stderr(&ux_err)
   , grammar(&res)
   , relabels(&relabels)
 {
-	UStringSetMap *as_list = new UStringSetMap;
-	UStringSetMap *as_set = new UStringSetMap;
+	std::unique_ptr<UStringSetMap> as_list{ new UStringSetMap };
+	std::unique_ptr<UStringSetMap> as_set{ new UStringSetMap };
 
 	for (auto rule : relabels.rule_by_number) {
 		const TagVector& fromTags = trie_getTagList(rule->maplist->trie);
-		Set *target = relabels.sets_list[rule->target];
+		Set* target = relabels.sets_list[rule->target];
 		const TagVector& toTags = trie_getTagList(target->trie);
 		if (!(rule->maplist->trie_special.empty() && target->trie_special.empty())) {
 			u_fprintf(ux_stderr, "Warning: Relabel rule '%S' on line %d has %d special tags, skipping!\n", rule->name.c_str(), rule->line);
@@ -58,7 +58,7 @@ Relabeller::Relabeller(Grammar& res, const Grammar& relabels, UFILE *ux_err)
 			u_fprintf(ux_stderr, "Warning: Relabel rule '%S' on line %d has %d tags in the maplist (expected 1), skipping!\n", rule->name.c_str(), rule->line, fromTags.size());
 			continue;
 		}
-		Tag *fromTag = fromTags[0];
+		Tag* fromTag = fromTags[0];
 		for (auto toit : toTags) {
 			if (toit->type & T_SPECIAL) {
 				u_fprintf(ux_stderr, "Warning: Special tags (%S) not supported yet.\n", toit->tag.c_str());
@@ -72,21 +72,14 @@ Relabeller::Relabeller(Grammar& res, const Grammar& relabels, UFILE *ux_err)
 		}
 	}
 
-	relabel_as_list = as_list;
-	relabel_as_set = as_set;
-}
-
-Relabeller::~Relabeller() {
-	delete relabel_as_list;
-	relabel_as_list = 0;
-	delete relabel_as_set;
-	relabel_as_set = 0;
+	relabel_as_list = std::move(as_list);
+	relabel_as_set = std::move(as_set);
 }
 
 TagVector Relabeller::transferTags(const TagVector tv_r) {
 	TagVector tv_g;
 	for (auto tag_r : tv_r) {
-		Tag *tag_g = new Tag(*tag_r);
+		Tag* tag_g = new Tag(*tag_r);
 		tag_g = grammar->addTag(tag_g); // new is deleted if it exists
 		tv_g.push_back(tag_g);
 	}
@@ -102,12 +95,12 @@ struct freq_sorter {
 	{
 	}
 
-	bool operator()(Tag *a, Tag *b) const {
+	bool operator()(Tag* a, Tag* b) const {
 		// Sort highest frequency first
 		return tag_freq.find(a)->second > tag_freq.find(b)->second;
 	}
 };
-void Relabeller::addTaglistsToSet(const std::set<TagVector> tvs, Set *s) {
+void Relabeller::addTaglistsToSet(const std::set<TagVector> tvs, Set* s) {
 	// Extracted from TextualParser::parseTagList
 
 	// Might be slightly faster to do this in relabelAsList after
@@ -161,7 +154,7 @@ void Relabeller::addTaglistsToSet(const std::set<TagVector> tvs, Set *s) {
 	}
 }
 
-void Relabeller::relabelAsList(Set *set_g, const Set *set_r, const Tag *fromTag) {
+void Relabeller::relabelAsList(Set* set_g, const Set* set_r, const Tag* fromTag) {
 	std::set<TagVector> old_tvs = trie_getTagsOrdered(set_g->trie);
 	trie_delete(set_g->trie);
 	set_g->trie.clear();
@@ -204,8 +197,8 @@ void Relabeller::reindexSet(Set& s) {
 	s.type |= trie_reindex(s.trie);
 	s.type |= trie_reindex(s.trie_special);
 
-	for (uint32_t i = 0; i < s.sets.size(); ++i) {
-		Set *set = grammar->sets_list[s.sets[i]];
+	for (auto i : s.sets) {
+		Set* set = grammar->sets_list[i];
 		reindexSet(*set);
 		if (set->type & ST_SPECIAL) {
 			s.type |= ST_SPECIAL;
@@ -224,17 +217,17 @@ void Relabeller::reindexSet(Set& s) {
 	}
 }
 
-void Relabeller::addSetToGrammar(Set *s) {
-	s->setName(grammar->sets_list.size() + 100);
+void Relabeller::addSetToGrammar(Set* s) {
+	s->setName(static_cast<uint32_t>(grammar->sets_list.size() + 100));
 	grammar->sets_list.push_back(s);
-	s->number = (uint32_t)grammar->sets_list.size() - 1;
+	s->number = static_cast<uint32_t>(grammar->sets_list.size() - 1);
 	reindexSet(*s);
 }
 
-uint32_t Relabeller::copyRelabelSetToGrammar(const Set *s_r) {
-	Set *s_g = grammar->allocateSet();
+uint32_t Relabeller::copyRelabelSetToGrammar(const Set* s_r) {
+	Set* s_g = grammar->allocateSet();
 
-	uint32_t nsets = s_r->sets.size();
+	uint32_t nsets = static_cast<uint32_t>(s_r->sets.size());
 	s_g->sets.resize(nsets);
 	for (uint32_t i = 0; i < nsets; ++i) {
 		// First ensure all referred-to sets exist:
@@ -243,7 +236,7 @@ uint32_t Relabeller::copyRelabelSetToGrammar(const Set *s_r) {
 		s_g->sets[i] = child_num_g;
 	}
 
-	uint32_t nset_ops = s_r->set_ops.size();
+	uint32_t nset_ops = static_cast<uint32_t>(s_r->set_ops.size());
 	s_g->set_ops.resize(nset_ops);
 	for (uint32_t i = 0; i < nset_ops; ++i) {
 		s_g->set_ops[i] = s_r->set_ops[i]; // enum from Strings.cpp, same across grammars
@@ -256,7 +249,7 @@ uint32_t Relabeller::copyRelabelSetToGrammar(const Set *s_r) {
 	return s_g->number;
 }
 
-void Relabeller::relabelAsSet(Set *set_g, const Set *set_r, const Tag *fromTag) {
+void Relabeller::relabelAsSet(Set* set_g, const Set* set_r, const Tag* fromTag) {
 	if (set_g->trie.empty()) {
 		// If the grammar's set is only an +/OR/- of other
 		// sets, then we only need to change those other sets
@@ -300,7 +293,7 @@ void Relabeller::relabelAsSet(Set *set_g, const Set *set_r, const Tag *fromTag) 
 			tvs_no_from.insert(transferTags(tags_except_from));
 		}
 	}
-	Set *s_gN = grammar->allocateSet();
+	Set* s_gN = grammar->allocateSet();
 	addTaglistsToSet(tvs_no_from, s_gN);
 	s_gN->trie_special = trie_copy(set_g->trie_special);
 	s_gN->ff_tags = set_g->ff_tags;
@@ -315,14 +308,14 @@ void Relabeller::relabelAsSet(Set *set_g, const Set *set_r, const Tag *fromTag) 
 		s_gI_num = s_gR_num;
 	}
 	else {
-		Set *s_gW = grammar->allocateSet();
+		Set* s_gW = grammar->allocateSet();
 		addTaglistsToSet(tvs_with_from, s_gW);
 		addSetToGrammar(s_gW);
 		if (s_gW->getNonEmpty().empty()) {
 			u_fprintf(ux_stderr, "Warning: unexpected empty tries when relabelling set %d!\n", set_g->number);
 		}
 
-		Set *s_gI = grammar->allocateSet(); // relabelling_of_fromTag + taglists_that_had_fromTag
+		Set* s_gI = grammar->allocateSet(); // relabelling_of_fromTag + taglists_that_had_fromTag
 		s_gI->sets.resize(2);
 		s_gI->sets[0] = s_gR_num;
 		s_gI->sets[1] = s_gW->number;
@@ -354,8 +347,8 @@ void Relabeller::relabel() {
 	}
 	// RELABEL AS LIST:
 	for (auto& it : *relabel_as_list) {
-		const Set *set_r = relabels->sets_list[it.second->number];
-		const Tag *fromTag = tag_by_str[it.first];
+		const Set* set_r = relabels->sets_list[it.second->number];
+		const Tag* fromTag = tag_by_str[it.first];
 
 		const auto sets_g = sets_by_tag.find(it.first);
 		if (sets_g != sets_by_tag.end()) {
@@ -366,8 +359,8 @@ void Relabeller::relabel() {
 	}
 	// RELABEL AS SET:
 	for (auto& it : *relabel_as_set) {
-		const Set *set_r = relabels->sets_list[it.second->number];
-		const Tag *fromTag = tag_by_str[it.first];
+		const Set* set_r = relabels->sets_list[it.second->number];
+		const Tag* fromTag = tag_by_str[it.first];
 
 		const auto sets_g = sets_by_tag.find(it.first);
 		if (sets_g != sets_by_tag.end()) {

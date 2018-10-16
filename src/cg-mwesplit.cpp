@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2007-2017, GrammarSoft ApS
+ * Copyright (C) 2007-2018, GrammarSoft ApS
  * Developed by Tino Didriksen <mail@tinodidriksen.com>
  * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
  *
@@ -41,11 +41,8 @@ UOption options[] = {
 }
 using namespace Options;
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
 	UErrorCode status = U_ZERO_ERROR;
-	UFILE *ux_stdin = 0;
-	UFILE *ux_stdout = 0;
-	UFILE *ux_stderr = 0;
 
 	/* Initialize ICU */
 	u_init(&status);
@@ -58,7 +55,7 @@ int main(int argc, char **argv) {
 	argc = u_parseArgs(argc, argv, NUM_OPTIONS, options);
 
 	if (argc < 0 || options[HELP1].doesOccur || options[HELP2].doesOccur) {
-		FILE *out = (argc < 0) ? stderr : stdout;
+		FILE* out = (argc < 0) ? stderr : stdout;
 		fprintf(out, "Usage: cg-mwesplit [OPTIONS]\n");
 		fprintf(out, "\n");
 		fprintf(out, "Options:\n");
@@ -93,35 +90,12 @@ int main(int argc, char **argv) {
 	}
 
 	ucnv_setDefaultName("UTF-8");
-	const char *codepage_default = ucnv_getDefaultName();
 	uloc_setDefault("en_US_POSIX", &status);
-	const char *locale_default = uloc_getDefault();
 
-	ux_stdin = u_finit(stdin, locale_default, codepage_default);
-	ux_stdout = u_finit(stdout, locale_default, codepage_default);
-	ux_stderr = u_finit(stderr, locale_default, codepage_default);
+	CG3::MweSplitApplicator applicator(std::cerr);
 
-	CG3::Grammar grammar;
-
-	grammar.ux_stderr = ux_stderr;
-	grammar.allocateDummySet();
-	grammar.delimiters = grammar.allocateSet();
-	grammar.addTagToSet(grammar.allocateTag(CG3::stringbits[0].getTerminatedBuffer()), grammar.delimiters);
-	grammar.reindex();
-
-	CG3::MweSplitApplicator applicator(ux_stderr);
-	applicator.setGrammar(&grammar);
-
-	std::unique_ptr<CG3::istream> instream;
-
-	instream.reset(new CG3::istream(ux_stdin));
-
-	applicator.is_conv = true;
 	applicator.verbosity_level = 0;
-	applicator.runGrammarOnText(*instream.get(), ux_stdout);
-
-	u_fclose(ux_stdout);
-	u_fclose(ux_stderr);
+	applicator.runGrammarOnText(std::cin, std::cout);
 
 	u_cleanup();
 }

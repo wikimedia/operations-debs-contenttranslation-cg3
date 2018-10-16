@@ -8,13 +8,13 @@ endif()
 find_path(Boost_LOCAL NAMES boost/config.hpp PATHS "${CMAKE_CURRENT_SOURCE_DIR}/../include" NO_DEFAULT_PATH)
 if(Boost_LOCAL)
 	set(BOOST_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../include")
-	find_package(Boost 1.48.0)
+	find_package(Boost 1.53.0)
 endif()
 if(NOT Boost_FOUND)
 	unset(BOOST_ROOT)
 	message(STATUS "Did not find Boost locally; trying globally...")
 	message(STATUS "If this doesn't work, run ./get-boost.sh and try again.")
-	find_package(Boost 1.48.0 REQUIRED)
+	find_package(Boost 1.53.0 REQUIRED)
 endif()
 include_directories(${Boost_INCLUDE_DIRS})
 link_directories(${Boost_LIBRARY_DIRS})
@@ -22,8 +22,8 @@ link_directories(${Boost_LIBRARY_DIRS})
 # ICU
 find_package(ICU REQUIRED)
 if(ICU_FOUND)
-	if(ICU_VERSION VERSION_LESS "4.2")
-		message(FATAL_ERROR "ICU is too old - ${ICU_VERSION} was found, but CG-3 requires 4.2 or newer")
+	if(ICU_VERSION VERSION_LESS "50.0")
+		message(FATAL_ERROR "ICU is too old - ${ICU_VERSION} was found, but CG-3 requires 50.0 or newer")
 	endif()
 	include_directories(${ICU_INCLUDE_DIRS})
 	message(STATUS "Found ICU version ${ICU_VERSION}")
@@ -80,12 +80,12 @@ set(LIBCG3_HEADERS
 	flat_unordered_set.hpp
 	inlines.hpp
 	interval_vector.hpp
-	istream.hpp
 	parser_helpers.hpp
 	process.hpp
 	scoped_stack.hpp
 	sorted_vector.hpp
 	stdafx.hpp
+	streambuf.hpp
 	uextras.hpp
 	version.hpp
 	)
@@ -127,10 +127,8 @@ if(MSVC)
 		)
 endif()
 
-add_library(libcg3-objs OBJECT ${LIBCG3_SOURCES})
-
 if(MSVC OR INSTALL_STATIC)
-	add_library(libcg3 STATIC libcg3.cpp $<TARGET_OBJECTS:libcg3-objs>)
+	add_library(libcg3 STATIC libcg3.cpp ${LIBCG3_SOURCES})
 	set_target_properties(libcg3 PROPERTIES OUTPUT_NAME "cg3")
 	set_target_properties(libcg3 PROPERTIES PREFIX "lib")
 	if(MSVC AND NOT CMAKE_BUILD_TYPE STREQUAL Debug)
@@ -141,7 +139,7 @@ if(MSVC OR INSTALL_STATIC)
 endif()
 
 if(NOT MSVC)
-	add_library(libcg3-shared SHARED libcg3.cpp $<TARGET_OBJECTS:libcg3-objs>)
+	add_library(libcg3-shared SHARED libcg3.cpp ${LIBCG3_SOURCES})
 	set_target_properties(libcg3-shared PROPERTIES SOVERSION ${_cg3_VERSION_MAJOR})
 	set_target_properties(libcg3-shared PROPERTIES OUTPUT_NAME "cg3")
 	set_target_properties(libcg3-shared PROPERTIES PREFIX "lib")
@@ -186,7 +184,7 @@ add_executable(cg-conv
 cg3_link(cg-conv)
 target_link_libraries(cg-conv ${LINKLIB})
 
-add_executable(cg-mwesplit cg-mwesplit.cpp MweSplitApplicator.cpp MweSplitApplicator.hpp)
+add_executable(cg-mwesplit cg-mwesplit.cpp)
 cg3_link(cg-mwesplit)
 target_link_libraries(cg-mwesplit ${LINKLIB})
 

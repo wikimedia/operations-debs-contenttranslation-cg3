@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -29,7 +29,7 @@
 
 namespace CG3 {
 
-FSTApplicator::FSTApplicator(UFILE *ux_err)
+FSTApplicator::FSTApplicator(std::ostream& ux_err)
   : GrammarApplicator(ux_err)
   , wfactor(1.0)
 {
@@ -38,7 +38,10 @@ FSTApplicator::FSTApplicator(UFILE *ux_err)
 	//sub_delims += '+';
 }
 
-void FSTApplicator::runGrammarOnText(istream& input, UFILE *output) {
+void FSTApplicator::runGrammarOnText(std::istream& input, std::ostream& output) {
+	ux_stdin = &input;
+	ux_stdout = &output;
+
 	if (!input.good()) {
 		u_fprintf(ux_stderr, "Error: Input is null - nothing to parse!\n");
 		CG3Quit(1);
@@ -70,27 +73,29 @@ void FSTApplicator::runGrammarOnText(istream& input, UFILE *output) {
 	bool ignoreinput = false;
 	bool did_soft_lookback = false;
 	UString wtag_buf;
-	Tag *wtag_tag;
+	Tag* wtag_tag;
 
 	index();
 
 	uint32_t resetAfter = ((num_windows + 4) * 2 + 1);
 	uint32_t lines = 0;
 
-	SingleWindow *cSWindow = 0;
-	Cohort *cCohort = 0;
-	Reading *cReading = 0;
+	SingleWindow* cSWindow = 0;
+	Cohort* cCohort = 0;
+	Reading* cReading = 0;
 
-	SingleWindow *lSWindow = 0;
-	Cohort *lCohort = 0;
+	SingleWindow* lSWindow = 0;
+	Cohort* lCohort = 0;
 
 	gWindow->window_span = num_windows;
+
+	ux_stripBOM(input);
 
 	while (!input.eof()) {
 		++lines;
 		size_t offset = 0, packoff = 0;
 		// Read as much of the next line as will fit in the current buffer
-		while (input.gets(&line[offset], line.size() - offset - 1)) {
+		while (u_fgets(&line[offset], static_cast<int32_t>(line.size() - offset - 1), input)) {
 			// Copy the segment just read to cleaned
 			for (size_t i = offset; i < line.size(); ++i) {
 				// Only copy one space character, regardless of how many are in input
@@ -128,7 +133,7 @@ void FSTApplicator::runGrammarOnText(istream& input, UFILE *output) {
 			--packoff;
 		}
 		if (!ignoreinput && cleaned[0]) {
-			UChar *space = &cleaned[0];
+			UChar* space = &cleaned[0];
 			SKIPTO_NOSPAN_RAW(space, '\t');
 
 			if (space[0] != '\t') {
@@ -166,22 +171,27 @@ void FSTApplicator::runGrammarOnText(istream& input, UFILE *output) {
 			}
 
 			++space;
-			while (space && (space[0] != '+' || space[1] != '?' || space[2] != 0)) {
+			while (space && *space && (space[0] != '+' || space[1] != '?' || space[2] != 0)) {
+				UChar* tab = u_strchr(space, '\t');
+				// FSTs sometimes output the input twice for non-matches, which turned into a weight of 0
+				if (tab && tab[1] == '+' && tab[2] == '?') {
+					break;
+				}
+
 				cReading = alloc_reading(cCohort);
 				insert_if_exists(cReading->parent->possible_sets, grammar->sets_any);
 				addTagToReading(*cReading, cCohort->wordform);
 
 				constexpr UChar notag[] = { '_', 0 };
-				const UChar *base = space;
+				const UChar* base = space;
 				TagList mappings;
 
 				wtag_tag = 0;
 				double weight = 0.0;
-				UChar *tab = u_strchr(space, '\t');
 				if (tab) {
 					tab[0] = 0;
 					++tab;
-					UChar *comma = u_strchr(tab, ',');
+					UChar* comma = u_strchr(tab, ',');
 					if (comma) {
 						comma[0] = '.';
 					}
@@ -210,7 +220,7 @@ void FSTApplicator::runGrammarOnText(istream& input, UFILE *output) {
 				}
 
 				// Initial baseform, because it may end on +
-				UChar *plus = u_strchr(space, '+');
+				UChar* plus = u_strchr(space, '+');
 				if (plus) {
 					++plus;
 					constexpr UChar cplus[] = { '+', 0 };
@@ -222,7 +232,7 @@ void FSTApplicator::runGrammarOnText(istream& input, UFILE *output) {
 				while (space && *space && (space = u_strchr(space, '+')) != 0) {
 					if (base && base[0]) {
 						int32_t f = u_strcspn(base, sub_delims.c_str());
-						UChar *hash = 0;
+						UChar* hash = 0;
 						if (f && base + f < space) {
 							hash = const_cast<UChar*>(base) + f;
 							size_t oh = hash - &cleaned[0];
@@ -247,7 +257,7 @@ void FSTApplicator::runGrammarOnText(istream& input, UFILE *output) {
 							u_fprintf(ux_stderr, "Warning: Line %u had empty tag.\n", numLines);
 							u_fflush(ux_stderr);
 						}
-						Tag *tag = addTag(base);
+						Tag* tag = addTag(base);
 						if (tag->type & T_MAPPING || tag->tag[0] == grammar->mapping_prefix) {
 							mappings.push_back(tag);
 						}
@@ -258,7 +268,7 @@ void FSTApplicator::runGrammarOnText(istream& input, UFILE *output) {
 							if (wtag_tag) {
 								addTagToReading(*cReading, wtag_tag);
 							}
-							Reading *nr = cReading->allocateReading(cReading->parent);
+							Reading* nr = cReading->allocateReading(cReading->parent);
 							nr->next = cReading;
 							cReading = nr;
 							++space;
@@ -274,7 +284,7 @@ void FSTApplicator::runGrammarOnText(istream& input, UFILE *output) {
 						tag += '"';
 						base = tag.c_str();
 					}
-					Tag *tag = addTag(base);
+					Tag* tag = addTag(base);
 					if (tag->type & T_MAPPING || tag->tag[0] == grammar->mapping_prefix) {
 						mappings.push_back(tag);
 					}
@@ -309,12 +319,24 @@ void FSTApplicator::runGrammarOnText(istream& input, UFILE *output) {
 			if (cCohort && cCohort->readings.empty()) {
 				initEmptyCohort(*cCohort);
 			}
+			if (is_conv) {
+				if (cCohort) {
+					cCohort->local_number = 1;
+					printCohort(cCohort, output);
+					free_cohort(cCohort);
+					cCohort = 0;
+				}
+				if (cleaned[0] && line[0]) {
+					u_fprintf(output, "%S", &line[0]);
+				}
+				continue;
+			}
 			if (cSWindow && cSWindow->cohorts.size() >= soft_limit && grammar->soft_delimiters && !did_soft_lookback) {
 				did_soft_lookback = true;
 				reverse_foreach (iter, cSWindow->cohorts) {
 					if (doesSetMatchCohortNormal(**iter, grammar->soft_delimiters->number)) {
 						did_soft_lookback = false;
-						Cohort *cohort = delimitAt(*cSWindow, *iter);
+						Cohort* cohort = delimitAt(*cSWindow, *iter);
 						cSWindow = cohort->parent->next;
 						if (cCohort) {
 							cCohort->parent = cSWindow;
@@ -373,12 +395,6 @@ void FSTApplicator::runGrammarOnText(istream& input, UFILE *output) {
 				lCohort = cCohort;
 			}
 			if (gWindow->next.size() > num_windows) {
-				while (!gWindow->previous.empty() && gWindow->previous.size() > num_windows) {
-					SingleWindow *tmp = gWindow->previous.front();
-					printSingleWindow(tmp, output);
-					free_swindow(tmp);
-					gWindow->previous.erase(gWindow->previous.begin());
-				}
 				gWindow->shuffleWindowsDown();
 				runGrammarOnWindow();
 				if (numWindows % resetAfter == 0) {
@@ -421,19 +437,13 @@ void FSTApplicator::runGrammarOnText(istream& input, UFILE *output) {
 		cSWindow = 0;
 	}
 	while (!gWindow->next.empty()) {
-		while (!gWindow->previous.empty() && gWindow->previous.size() > num_windows) {
-			SingleWindow *tmp = gWindow->previous.front();
-			printSingleWindow(tmp, output);
-			free_swindow(tmp);
-			gWindow->previous.erase(gWindow->previous.begin());
-		}
 		gWindow->shuffleWindowsDown();
 		runGrammarOnWindow();
 	}
 
 	gWindow->shuffleWindowsDown();
 	while (!gWindow->previous.empty()) {
-		SingleWindow *tmp = gWindow->previous.front();
+		SingleWindow* tmp = gWindow->previous.front();
 		printSingleWindow(tmp, output);
 		free_swindow(tmp);
 		gWindow->previous.erase(gWindow->previous.begin());

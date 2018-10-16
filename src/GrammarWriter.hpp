@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -36,20 +36,20 @@ class GrammarWriter {
 public:
 	bool statistics;
 
-	GrammarWriter(Grammar& res, UFILE *ux_err);
+	GrammarWriter(Grammar& res, std::ostream& ux_err);
 	~GrammarWriter();
 
-	int writeGrammar(UFILE *output);
+	int writeGrammar(std::ostream& output);
 
 private:
-	UFILE *ux_stderr;
+	std::ostream* ux_stderr;
 	uint32FlatHashSet used_sets;
-	const Grammar *grammar;
+	const Grammar* grammar;
 
-	void printTag(UFILE *out, const Tag& tag);
-	void printSet(UFILE *output, const Set& curset);
-	void printRule(UFILE *to, const Rule& rule);
-	void printContextualTest(UFILE *to, const ContextualTest& test);
+	void printTag(std::ostream& out, const Tag& tag);
+	void printSet(std::ostream& output, const Set& curset);
+	void printRule(std::ostream& to, const Rule& rule);
+	void printContextualTest(std::ostream& to, const ContextualTest& test);
 };
 }
 

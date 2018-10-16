@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -30,16 +30,27 @@ class Grammar;
 
 class IGrammarParser {
 public:
-	virtual ~IGrammarParser(){};
+	IGrammarParser(Grammar& res, std::ostream& ux_err)
+	  : ux_stderr(&ux_err)
+	  , result(&res)
+	{
+	}
+
+	virtual ~IGrammarParser() {}
 	virtual void setCompatible(bool compat) = 0;
 	virtual void setVerbosity(uint32_t level) = 0;
-	virtual int parse_grammar_from_file(const char *filename, const char *locale, const char *codepage) = 0;
+	virtual int parse_grammar(const char* buffer, size_t length) = 0;
+	virtual int parse_grammar(const UChar* buffer, size_t length) = 0;
+	virtual int parse_grammar(const std::string& buffer) = 0;
+	virtual int parse_grammar(const char* filename) = 0;
 
-	UFILE *ux_stderr;
+	std::ostream* ux_stderr = 0;
 
 protected:
-	Grammar *result;
-	uint32_t verbosity;
+	virtual int parse_grammar(UString& buffer) = 0;
+
+	Grammar* result = 0;
+	uint32_t verbosity = 0;
 };
 }
 

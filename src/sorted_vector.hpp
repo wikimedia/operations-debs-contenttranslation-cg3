@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -44,7 +44,7 @@ namespace detail {
 	}
 }
 
-template<typename T, typename Comp = std::less<T> >
+template<typename T, typename Comp = std::less<T>>
 class sorted_vector {
 public:
 	typedef typename std::vector<T> container;

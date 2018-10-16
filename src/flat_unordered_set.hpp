@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -37,7 +37,7 @@ public:
 	class const_iterator : public std::iterator<std::bidirectional_iterator_tag, T> {
 	private:
 		friend class flat_unordered_set;
-		const flat_unordered_set *fus;
+		const flat_unordered_set* fus;
 		size_t i;
 
 	public:
