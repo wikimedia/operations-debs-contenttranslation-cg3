@@ -1,3 +1,11 @@
+cg3 (1.1.7-1+wmf1) jessie-wikimedia; urgency=low
+
+  * New upstream release.
+  * Minor updates in debian/control, debian/rules.
+  * Updated debian/copyright.
+
+ -- Kartik Mistry <kartik@debian.org>  Tue, 16 Oct 2018 11:16:59 +0530
+
 cg3 (1.0.0~r12254-1+wmf1) jessie-wikimedia; urgency=low
 
   * New upstream release.
