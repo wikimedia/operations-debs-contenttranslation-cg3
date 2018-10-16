@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -34,7 +34,7 @@ typedef std::vector<SingleWindow*> SingleWindowCont;
 
 class Window {
 public:
-	GrammarApplicator *parent;
+	GrammarApplicator* parent;
 	uint32_t cohort_counter;
 	uint32_t window_counter;
 	uint32_t window_span;
@@ -45,15 +45,15 @@ public:
 	uint32FlatHashMap relation_map;
 
 	SingleWindowCont previous;
-	SingleWindow *current;
+	SingleWindow* current;
 	SingleWindowCont next;
 
-	Window(GrammarApplicator *p);
+	Window(GrammarApplicator* p);
 	~Window();
 
-	SingleWindow *allocSingleWindow();
-	SingleWindow *allocPushSingleWindow();
-	SingleWindow *allocAppendSingleWindow();
+	SingleWindow* allocSingleWindow();
+	SingleWindow* allocPushSingleWindow();
+	SingleWindow* allocAppendSingleWindow();
 	void shuffleWindowsDown();
 	void rebuildSingleWindowLinks();
 	void rebuildCohortLinks();

@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -23,7 +23,7 @@
 
 namespace CG3 {
 
-FormatConverter::FormatConverter(UFILE *ux_err)
+FormatConverter::FormatConverter(std::ostream& ux_err)
   : GrammarApplicator(ux_err)
   , ApertiumApplicator(ux_err)
   , NicelineApplicator(ux_err)
@@ -43,7 +43,10 @@ void FormatConverter::setOutputFormat(CG_FORMATS format) {
 	outformat = format;
 }
 
-void FormatConverter::runGrammarOnText(istream& input, UFILE *output) {
+void FormatConverter::runGrammarOnText(std::istream& input, std::ostream& output) {
+	ux_stdin = &input;
+	ux_stdout = &output;
+
 	switch (informat) {
 	case FMT_CG: {
 		GrammarApplicator::runGrammarOnText(input, output);
@@ -70,7 +73,7 @@ void FormatConverter::runGrammarOnText(istream& input, UFILE *output) {
 	}
 }
 
-void FormatConverter::printSingleWindow(SingleWindow *window, UFILE *output) {
+void FormatConverter::printSingleWindow(SingleWindow* window, std::ostream& output) {
 	switch (outformat) {
 	case FMT_CG: {
 		GrammarApplicator::printSingleWindow(window, output);

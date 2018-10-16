@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -30,6 +30,8 @@
 	#pragma warning (disable: 4456)
 	// warning C4458: declaration hides class member
 	#pragma warning (disable: 4458)
+	// warning C4312: 'operation' : conversion from 'type1' to 'type2' of greater size 
+	#pragma warning (disable: 4312)
 #endif
 
 #include <exception>
@@ -108,6 +110,7 @@
 #include <unicode/ustring.h>
 #include <unicode/uregex.h>
 #include <unicode/ubrk.h>
+using namespace icu;
 
 namespace CG3 {
 typedef std::basic_string<UChar> UString;

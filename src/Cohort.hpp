@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -52,14 +52,14 @@ public:
 	// ToDo: Get rid of global_number in favour of Cohort* relations
 	uint32_t global_number;
 	uint32_t local_number;
-	Tag *wordform;
+	Tag* wordform;
 	uint32_t dep_self;
 	uint32_t dep_parent;
 	uint32_t is_pleft, is_pright;
-	SingleWindow *parent;
+	SingleWindow* parent;
 	UString text;
 	Cohort *prev, *next;
-	Reading *wread;
+	Reading* wread;
 	ReadingList readings;
 	ReadingList deleted;
 	ReadingList delayed;
@@ -77,14 +77,15 @@ public:
 
 	void detach();
 
-	Cohort(SingleWindow *p);
+	Cohort(SingleWindow* p);
 	~Cohort();
 	void clear();
 
 	void addChild(uint32_t child);
 	void remChild(uint32_t child);
-	void appendReading(Reading *read);
-	Reading *allocateAppendReading();
+	void appendReading(Reading* read);
+	Reading* allocateAppendReading();
+	Reading* allocateAppendReading(Reading& r);
 	bool addRelation(uint32_t rel, uint32_t cohort);
 	bool setRelation(uint32_t rel, uint32_t cohort);
 	bool remRelation(uint32_t rel, uint32_t cohort);
@@ -98,8 +99,8 @@ struct compare_Cohort;
 typedef sorted_vector<Cohort*, compare_Cohort> CohortSet;
 typedef std::unordered_map<uint32_t, CohortSet> uint32ToCohortsMap;
 
-Cohort *alloc_cohort(SingleWindow *p);
-void free_cohort(Cohort *c);
+Cohort* alloc_cohort(SingleWindow* p);
+void free_cohort(Cohort* c);
 }
 
 #endif

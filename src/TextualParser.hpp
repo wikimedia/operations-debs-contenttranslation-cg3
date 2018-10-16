@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -35,24 +35,27 @@ class ContextualTest;
 
 class TextualParser : public IGrammarParser {
 public:
-	TextualParser(Grammar& result, UFILE *ux_err, bool dump_ast = false);
+	TextualParser(Grammar& result, std::ostream& ux_err, bool dump_ast = false);
 
 	void setCompatible(bool compat);
 	void setVerbosity(uint32_t level);
-	void print_ast(UFILE *out);
+	void print_ast(std::ostream& out);
 
-	int parse_grammar_from_file(const char *filename, const char *locale, const char *codepage);
+	int parse_grammar(const char* buffer, size_t length);
+	int parse_grammar(const UChar* buffer, size_t length);
+	int parse_grammar(const std::string& buffer);
+	int parse_grammar(const char* filename);
 
-	void error(const char *str);
-	void error(const char *str, UChar c);
-	void error(const char *str, const UChar *p);
-	void error(const char *str, UChar c, const UChar *p);
-	void error(const char *str, const char *s, const UChar *p);
-	void error(const char *str, const UChar *s, const UChar *p);
-	void error(const char *str, const char *s, const UChar *S, const UChar *p);
-	Tag *addTag(Tag *tag);
-	Grammar *get_grammar() { return result; }
-	const char *filebase;
+	void error(const char* str);
+	void error(const char* str, UChar c);
+	void error(const char* str, const UChar* p);
+	void error(const char* str, UChar c, const UChar* p);
+	void error(const char* str, const char* s, const UChar* p);
+	void error(const char* str, const UChar* s, const UChar* p);
+	void error(const char* str, const char* s, const UChar* S, const UChar* p);
+	Tag* addTag(Tag* tag);
+	Grammar* get_grammar() { return result; }
+	const char* filebase;
 	uint32SortedVector strict_tags;
 	uint32SortedVector list_tags;
 
@@ -63,29 +66,29 @@ private:
 	uint32_t seen_mapping_prefix;
 	bool option_vislcg_compat;
 	bool in_section, in_before_sections, in_after_sections, in_null_section;
-	bool no_isets, no_itmpls, strict_wforms, strict_bforms, strict_second, strict_regex=false, strict_icase=false;
-	const char *filename;
-	const char *locale;
-	const char *codepage;
+	bool no_isets, no_itmpls, strict_wforms, strict_bforms, strict_second, strict_regex = false, strict_icase = false;
+	bool self_no_barrier = false;
+	const char* filename;
 
-	typedef std::unordered_map<ContextualTest*, std::pair<size_t, UString> > deferred_t;
+	typedef std::unordered_map<ContextualTest*, std::pair<size_t, UString>> deferred_t;
 	deferred_t deferred_tmpls;
-	std::vector<std::shared_ptr<std::vector<UChar> > > grammarbufs;
+	std::vector<std::unique_ptr<UString>> grammarbufs;
 
-	void parseFromUChar(UChar *input, const char *fname = 0);
-	void addRuleToGrammar(Rule *rule);
+	int parse_grammar(UString& buffer);
+	void parseFromUChar(UChar* input, const char* fname = 0);
+	void addRuleToGrammar(Rule* rule);
 
-	Tag *parseTag(const UChar *to, const UChar *p = 0);
-	void parseTagList(UChar *& p, Set *s);
-	Set *parseSet(const UChar *name, const UChar *p = 0);
-	Set *parseSetInline(UChar *& p, Set *s = 0);
-	Set *parseSetInlineWrapper(UChar *& p);
-	void parseContextualTestPosition(UChar *& p, ContextualTest& t);
-	ContextualTest *parseContextualTestList(UChar *& p, Rule *rule = 0);
-	void parseContextualTests(UChar *& p, Rule *rule);
-	void parseContextualDependencyTests(UChar *& p, Rule *rule);
-	void parseRule(UChar *& p, KEYWORDS key);
-	void parseAnchorish(UChar *& p);
+	Tag* parseTag(const UChar* to, const UChar* p = 0);
+	void parseTagList(UChar*& p, Set* s);
+	Set* parseSet(const UChar* name, const UChar* p = 0);
+	Set* parseSetInline(UChar*& p, Set* s = 0);
+	Set* parseSetInlineWrapper(UChar*& p);
+	void parseContextualTestPosition(UChar*& p, ContextualTest& t);
+	ContextualTest* parseContextualTestList(UChar*& p, Rule* rule = 0);
+	void parseContextualTests(UChar*& p, Rule* rule);
+	void parseContextualDependencyTests(UChar*& p, Rule* rule);
+	void parseRule(UChar*& p, KEYWORDS key);
+	void parseAnchorish(UChar*& p);
 
 	int error_counter;
 	void incErrorCount();

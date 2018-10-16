@@ -22,13 +22,12 @@ in the public domain.
 	(void) fwrite(s, (unsigned)strlen(s), 1, stderr);\
 	(void) fwrite(errbuf, 2, 1, stderr);}
 
-
 int	opterr = 1;
 int	optind = 1;
 int	optopt;
 char	*optarg;
 
-int getopt(int argc, char **argv, char *opts) {
+int getopt(int argc, char **argv, const char *opts) {
 	static int sp = 1;
 	register int c;
 	register char *cp;

@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -29,8 +29,8 @@ namespace CG3 {
 
 class FSTApplicator : public virtual GrammarApplicator {
 public:
-	FSTApplicator(UFILE *ux_err);
-	void runGrammarOnText(istream& input, UFILE *output);
+	FSTApplicator(std::ostream& ux_err);
+	void runGrammarOnText(std::istream& input, std::ostream& output);
 
 	double wfactor;
 	UString wtag;

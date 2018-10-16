@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -37,14 +37,14 @@ namespace CG3 {
 class MweSplitApplicator : public virtual GrammarApplicator {
 private:
 	// bool did_warn_unhandled_situation;
-	const Tag *maybeWfTag(const Reading *r);
-	std::vector<Cohort*> splitMwe(Cohort *cohort);
+	const Tag* maybeWfTag(const Reading* r);
+	std::vector<Cohort*> splitMwe(Cohort* cohort);
 
 public:
-	MweSplitApplicator(UFILE *ux_err);
-	void runGrammarOnText(istream& input, UFILE *output);
+	MweSplitApplicator(std::ostream& ux_err);
+	void runGrammarOnText(std::istream& input, std::ostream& output);
 
-	void printSingleWindow(SingleWindow *window, UFILE *output);
+	void printSingleWindow(SingleWindow* window, std::ostream& output);
 };
 }
 

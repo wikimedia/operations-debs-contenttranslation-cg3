@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -32,7 +32,7 @@ typedef bc::flat_map<Tag*, trie_node_t, compare_Tag> trie_t;
 
 struct trie_node_t {
 	bool terminal;
-	trie_t *trie;
+	trie_t* trie;
 
 	trie_node_t()
 	  : terminal(false)
@@ -68,8 +68,8 @@ inline bool trie_insert(trie_t& trie, const TagVector& tv, size_t w = 0) {
 	return true;
 }
 
-inline trie_t *_trie_copy_helper(const trie_t& trie) {
-	trie_t *nt = new trie_t;
+inline trie_t* _trie_copy_helper(const trie_t& trie) {
+	trie_t* nt = new trie_t;
 	for (auto& p : trie) {
 		(*nt)[p.first].terminal = p.second.terminal;
 		if (p.second.trie) {
@@ -155,7 +155,7 @@ inline void trie_getTagList(const trie_t& trie, TagList& theTags) {
 	}
 }
 
-inline bool trie_getTagList(const trie_t& trie, TagList& theTags, const void *node) {
+inline bool trie_getTagList(const trie_t& trie, TagList& theTags, const void* node) {
 	for (auto& kv : trie) {
 		theTags.push_back(kv.first);
 		if (node == &kv) {
@@ -260,7 +260,7 @@ inline void trie_serialize(const trie_t& trie, std::ostream& out) {
 		writeSwapped<uint32_t>(out, kv.first->number);
 		writeSwapped<uint8_t>(out, kv.second.terminal);
 		if (kv.second.trie) {
-			writeSwapped<uint32_t>(out, kv.second.trie->size());
+			writeSwapped<uint32_t>(out, static_cast<uint32_t>(kv.second.trie->size()));
 			trie_serialize(*kv.second.trie, out);
 		}
 		else {

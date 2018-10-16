@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -23,18 +23,25 @@
 
 namespace CG3 {
 
-MweSplitApplicator::MweSplitApplicator(UFILE *ux_err)
+MweSplitApplicator::MweSplitApplicator(std::ostream& ux_err)
   : GrammarApplicator(ux_err)
 {
+	CG3::Grammar* grammar = new CG3::Grammar;
+	grammar->ux_stderr = ux_stderr;
+	grammar->allocateDummySet();
+	grammar->delimiters = grammar->allocateSet();
+	grammar->addTagToSet(grammar->allocateTag(CG3::stringbits[0].getTerminatedBuffer()), grammar->delimiters);
+	grammar->reindex();
+	setGrammar(grammar);
+	owns_grammar = true;
+	is_conv = true;
 }
 
-
-void MweSplitApplicator::runGrammarOnText(istream& input, UFILE *output) {
+void MweSplitApplicator::runGrammarOnText(std::istream& input, std::ostream& output) {
 	GrammarApplicator::runGrammarOnText(input, output);
 }
 
-
-const Tag *MweSplitApplicator::maybeWfTag(const Reading *r) {
+const Tag* MweSplitApplicator::maybeWfTag(const Reading* r) {
 	for (auto tter : r->tags_list) {
 		if ((!show_end_tags && tter == endtag) || tter == begintag) {
 			continue;
@@ -42,7 +49,7 @@ const Tag *MweSplitApplicator::maybeWfTag(const Reading *r) {
 		if (tter == r->baseform || tter == r->parent->wordform->hash) {
 			continue;
 		}
-		const Tag *tag = single_tags[tter];
+		const Tag* tag = single_tags[tter];
 		// If we are to split, there has to be at least one wordform on a head (not-sub) reading
 		if (tag->type & T_WORDFORM) {
 			return tag;
@@ -51,7 +58,7 @@ const Tag *MweSplitApplicator::maybeWfTag(const Reading *r) {
 	return NULL;
 }
 
-std::vector<Cohort*> MweSplitApplicator::splitMwe(Cohort *cohort) {
+std::vector<Cohort*> MweSplitApplicator::splitMwe(Cohort* cohort) {
 	constexpr UChar rtrimblank[] = { ' ', '\n', '\r', '\t', 0 };
 	constexpr UChar textprefix[] = { ':', 0 };
 	std::vector<Cohort*> cos;
@@ -74,15 +81,15 @@ std::vector<Cohort*> MweSplitApplicator::splitMwe(Cohort *cohort) {
 	}
 	for (auto r : cohort->readings) {
 		size_t pos = std::numeric_limits<size_t>::max();
-		Reading *prev = NULL; // prev == NULL || prev->next == rNew (or a ->next of rNew)
+		Reading* prev = NULL; // prev == NULL || prev->next == rNew (or a ->next of rNew)
 		for (auto sub = r; sub; sub = sub->next) {
-			const Tag *wfTag = maybeWfTag(sub);
+			const Tag* wfTag = maybeWfTag(sub);
 			if (wfTag == NULL) {
 				prev = prev->next;
 			}
 			else {
 				++pos;
-				Cohort *c;
+				Cohort* c;
 				while (cos.size() < pos + 1) {
 					c = alloc_cohort(cohort->parent);
 					c->global_number = gWindow->cohort_counter++;
@@ -105,7 +112,7 @@ std::vector<Cohort*> MweSplitApplicator::splitMwe(Cohort *cohort) {
 					c->text = textprefix + wfTag->tag.substr(i, wfEnd + 1 - i);
 				}
 
-				Reading *rNew = alloc_reading(*sub);
+				Reading* rNew = alloc_reading(*sub);
 				for (size_t i = 0; i < rNew->tags_list.size(); ++i) {
 					auto& tter = rNew->tags_list[i];
 					if (tter == wfTag->hash || tter == rNew->parent->wordform->hash) {
@@ -134,14 +141,13 @@ std::vector<Cohort*> MweSplitApplicator::splitMwe(Cohort *cohort) {
 	return cos;
 }
 
-
-void MweSplitApplicator::printSingleWindow(SingleWindow *window, UFILE *output) {
+void MweSplitApplicator::printSingleWindow(SingleWindow* window, std::ostream& output) {
 	for (auto var : window->variables_output) {
-		Tag *key = single_tags[var];
+		Tag* key = single_tags[var];
 		auto iter = window->variables_set.find(var);
 		if (iter != window->variables_set.end()) {
 			if (iter->second != grammar->tag_any) {
-				Tag *value = single_tags[iter->second];
+				Tag* value = single_tags[iter->second];
 				u_fprintf(output, "%S%S=%S>\n", stringbits[S_CMD_SETVAR].getTerminatedBuffer(), key->tag.c_str(), value->tag.c_str());
 			}
 			else {
@@ -155,14 +161,14 @@ void MweSplitApplicator::printSingleWindow(SingleWindow *window, UFILE *output) 
 
 	if (!window->text.empty()) {
 		u_fprintf(output, "%S", window->text.c_str());
-		if (!ISNL(window->text[window->text.length() - 1])) {
+		if (!ISNL(window->text[window->text.size() - 1])) {
 			u_fputc('\n', output);
 		}
 	}
 
 	uint32_t cs = (uint32_t)window->cohorts.size();
 	for (uint32_t c = 0; c < cs; c++) {
-		Cohort *cohort = window->cohorts[c];
+		Cohort* cohort = window->cohorts[c];
 		std::vector<Cohort*> cs = splitMwe(cohort);
 		for (auto iter : cs) {
 			printCohort(iter, output);

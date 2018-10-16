@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -23,9 +23,11 @@
 #ifndef c6d28b7452ec699b_STRINGS_H
 #define c6d28b7452ec699b_STRINGS_H
 
+#include <cstdint>
+
 namespace CG3 {
 // ToDo: Add ABORT
-enum KEYWORDS {
+enum KEYWORDS : uint32_t {
 	K_IGNORE,
 	K_SETS,
 	K_LIST,
@@ -86,10 +88,13 @@ enum KEYWORDS {
 	K_REOPEN_MAPPINGS,
 	K_SUBREADINGS,
 	K_SPLITCOHORT,
+	K_PROTECT,
+	K_UNPROTECT,
+	K_MERGECOHORTS,
 	KEYWORD_COUNT,
 };
 
-enum {
+enum : uint32_t {
 	S_IGNORE,
 	S_PIPE,
 	S_TO,
@@ -168,13 +173,15 @@ enum {
 	S_STRICT_SECOND,
 	S_STRICT_REGEX,
 	S_STRICT_ICASE,
+	S_SELF_NO_BARRIER,
+	S_ORDERED,
 	S_CMD_SETVAR,
 	S_CMD_REMVAR,
 	STRINGS_COUNT,
 };
 
 // This must be kept in lock-step with Rule.hpp's RULE_FLAGS
-enum {
+enum : uint32_t {
 	FL_NEAREST,
 	FL_ALLOWLOOP,
 	FL_DELAYED,
@@ -215,11 +222,13 @@ extern UnicodeString keywords[KEYWORD_COUNT];
 extern UnicodeString stringbits[STRINGS_COUNT];
 extern UnicodeString g_flags[FLAGS_COUNT];
 
-const size_t CG3_BUFFER_SIZE = 8192;
-const size_t NUM_GBUFFERS = 1;
-extern std::vector<std::vector<UChar> > gbuffers;
-const size_t NUM_CBUFFERS = 1;
+constexpr size_t CG3_BUFFER_SIZE = 8192;
+constexpr size_t NUM_GBUFFERS = 1;
+extern std::vector<std::vector<UChar>> gbuffers;
+constexpr size_t NUM_CBUFFERS = 1;
 extern std::vector<std::string> cbuffers;
+
+constexpr UChar not_sign = L'\u00AC';
 }
 
 #endif

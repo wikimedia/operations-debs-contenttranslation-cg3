@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -29,13 +29,16 @@
 
 namespace CG3 {
 
-PlaintextApplicator::PlaintextApplicator(UFILE *ux_err)
+PlaintextApplicator::PlaintextApplicator(std::ostream& ux_err)
   : GrammarApplicator(ux_err)
 {
 	allow_magic_readings = true;
 }
 
-void PlaintextApplicator::runGrammarOnText(istream& input, UFILE *output) {
+void PlaintextApplicator::runGrammarOnText(std::istream& input, std::ostream& output) {
+	ux_stdin = &input;
+	ux_stdout = &output;
+
 	if (!input.good()) {
 		u_fprintf(ux_stderr, "Error: Input is null - nothing to parse!\n");
 		CG3Quit(1);
@@ -72,20 +75,22 @@ void PlaintextApplicator::runGrammarOnText(istream& input, UFILE *output) {
 	uint32_t resetAfter = ((num_windows + 4) * 2 + 1);
 	uint32_t lines = 0;
 
-	SingleWindow *cSWindow = 0;
-	Cohort *cCohort = 0;
-	Reading *cReading = 0;
+	SingleWindow* cSWindow = 0;
+	Cohort* cCohort = 0;
+	Reading* cReading = 0;
 
-	SingleWindow *lSWindow = 0;
-	Cohort *lCohort = 0;
+	SingleWindow* lSWindow = 0;
+	Cohort* lCohort = 0;
 
 	gWindow->window_span = num_windows;
+
+	ux_stripBOM(input);
 
 	while (!input.eof()) {
 		++lines;
 		size_t offset = 0, packoff = 0;
 		// Read as much of the next line as will fit in the current buffer
-		while (input.gets(&line[offset], line.size() - offset - 1)) {
+		while (u_fgets(&line[offset], static_cast<int32_t>(line.size() - offset - 1), input)) {
 			// Copy the segment just read to cleaned
 			for (size_t i = offset; i < line.size(); ++i) {
 				// Only copy one space character, regardless of how many are in input
@@ -127,7 +132,7 @@ void PlaintextApplicator::runGrammarOnText(istream& input, UFILE *output) {
 				reverse_foreach (iter, cSWindow->cohorts) {
 					if (doesSetMatchCohortNormal(**iter, grammar->soft_delimiters->number)) {
 						did_soft_lookback = false;
-						Cohort *cohort = delimitAt(*cSWindow, *iter);
+						Cohort* cohort = delimitAt(*cSWindow, *iter);
 						cSWindow = cohort->parent->next;
 						if (cCohort) {
 							cCohort->parent = cSWindow;
@@ -186,12 +191,6 @@ void PlaintextApplicator::runGrammarOnText(istream& input, UFILE *output) {
 				did_soft_lookback = false;
 			}
 			if (gWindow->next.size() > num_windows) {
-				while (!gWindow->previous.empty() && gWindow->previous.size() > num_windows) {
-					SingleWindow *tmp = gWindow->previous.front();
-					printSingleWindow(tmp, output);
-					free_swindow(tmp);
-					gWindow->previous.erase(gWindow->previous.begin());
-				}
 				gWindow->shuffleWindowsDown();
 				runGrammarOnWindow();
 				if (numWindows % resetAfter == 0) {
@@ -203,8 +202,8 @@ void PlaintextApplicator::runGrammarOnText(istream& input, UFILE *output) {
 				}
 			}
 			std::vector<UChar*> tokens_raw;
-			UChar *base = &cleaned[0];
-			UChar *space = base;
+			UChar* base = &cleaned[0];
+			UChar* space = base;
 
 			while (space && *space && (space = u_strchr(space, ' ')) != 0) {
 				space[0] = 0;
@@ -218,8 +217,7 @@ void PlaintextApplicator::runGrammarOnText(istream& input, UFILE *output) {
 			}
 
 			std::vector<UnicodeString> tokens;
-			for (size_t i = 0; i < tokens_raw.size(); ++i) {
-				UChar *p = tokens_raw[i];
+			for (auto p : tokens_raw) {
 				size_t len = u_strlen(p);
 				while (*p && u_ispunct(p[0])) {
 					tokens.push_back(UnicodeString(p[0]));
@@ -238,8 +236,7 @@ void PlaintextApplicator::runGrammarOnText(istream& input, UFILE *output) {
 			}
 
 			UString tag;
-			for (size_t i = 0; i < tokens.size(); ++i) {
-				UnicodeString& token = tokens[i];
+			for (auto& token : tokens) {
 				bool first_upper = (u_isupper(token[0]) != 0);
 				bool all_upper = first_upper;
 				bool mixed_upper = false;
@@ -328,19 +325,13 @@ void PlaintextApplicator::runGrammarOnText(istream& input, UFILE *output) {
 		cSWindow = 0;
 	}
 	while (!gWindow->next.empty()) {
-		while (!gWindow->previous.empty() && gWindow->previous.size() > num_windows) {
-			SingleWindow *tmp = gWindow->previous.front();
-			printSingleWindow(tmp, output);
-			free_swindow(tmp);
-			gWindow->previous.erase(gWindow->previous.begin());
-		}
 		gWindow->shuffleWindowsDown();
 		runGrammarOnWindow();
 	}
 
 	gWindow->shuffleWindowsDown();
 	while (!gWindow->previous.empty()) {
-		SingleWindow *tmp = gWindow->previous.front();
+		SingleWindow* tmp = gWindow->previous.front();
 		printSingleWindow(tmp, output);
 		free_swindow(tmp);
 		gWindow->previous.erase(gWindow->previous.begin());
@@ -349,7 +340,7 @@ void PlaintextApplicator::runGrammarOnText(istream& input, UFILE *output) {
 	u_fflush(output);
 }
 
-void PlaintextApplicator::printCohort(Cohort *cohort, UFILE *output) {
+void PlaintextApplicator::printCohort(Cohort* cohort, std::ostream& output) {
 	if (cohort->local_number == 0) {
 		return;
 	}
@@ -360,10 +351,10 @@ void PlaintextApplicator::printCohort(Cohort *cohort, UFILE *output) {
 	u_fprintf(output, "%.*S ", cohort->wordform->tag.size() - 4, cohort->wordform->tag.c_str() + 2);
 }
 
-void PlaintextApplicator::printSingleWindow(SingleWindow *window, UFILE *output) {
-	uint32_t cs = (uint32_t)window->cohorts.size();
+void PlaintextApplicator::printSingleWindow(SingleWindow* window, std::ostream& output) {
+	uint32_t cs = static_cast<uint32_t>(window->cohorts.size());
 	for (uint32_t c = 0; c < cs; c++) {
-		Cohort *cohort = window->cohorts[c];
+		Cohort* cohort = window->cohorts[c];
 		printCohort(cohort, output);
 	}
 	u_fputc('\n', output);

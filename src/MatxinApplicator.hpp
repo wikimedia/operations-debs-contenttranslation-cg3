@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -28,9 +28,9 @@
 namespace CG3 {
 class MatxinApplicator : public virtual GrammarApplicator {
 public:
-	MatxinApplicator(UFILE *ux_err);
+	MatxinApplicator(std::ostream& ux_err);
 
-	void runGrammarOnText(istream& input, UFILE *output);
+	void runGrammarOnText(std::istream& input, std::ostream& output);
 
 	bool getNullFlush();
 	bool wordform_case;
@@ -38,7 +38,7 @@ public:
 	bool print_only_first;
 	void setNullFlush(bool pNullFlush);
 
-	void testPR(UFILE *output);
+	void testPR(std::ostream& output);
 
 protected:
 	struct Node {
@@ -51,29 +51,23 @@ protected:
 	};
 
 	std::map<int, Node> nodes;
-	std::map<int, std::vector<int> > deps;
+	std::map<int, std::vector<int>> deps;
 
 	bool nullFlush;
 	bool runningWithNullFlush;
 
-	void printReading(Reading *reading, Node& n, UFILE *output);
-	void printSingleWindow(SingleWindow *window, UFILE *output);
+	void printReading(Reading* reading, Node& n, std::ostream& output);
+	void printSingleWindow(SingleWindow* window, std::ostream& output);
 
-	void procNode(int& depth, std::map<int, Node>& nodes, std::map<int, std::vector<int> >& deps, int node, UFILE *output);
+	void procNode(int& depth, std::map<int, Node>& nodes, std::map<int, std::vector<int>>& deps, int node, std::ostream& output);
 
+	void runGrammarOnTextWrapperNullFlush(std::istream& input, std::ostream& output);
 
-	void runGrammarOnTextWrapperNullFlush(istream& input, UFILE *output);
-
-	UChar u_fgetc_wrapper(istream& input);
-	UConverter *fgetc_converter;
-	char fgetc_inputbuf[5];
-	UChar fgetc_outputbuf[5];
-	UErrorCode fgetc_error;
 	void mergeMappings(Cohort& cohort);
 
 private:
-	void processReading(Reading *cReading, const UChar *reading_string);
-	void processReading(Reading *cReading, const UString& reading_string);
+	void processReading(Reading* cReading, const UChar* reading_string);
+	void processReading(Reading* cReading, const UString& reading_string);
 };
 }
 

@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -31,11 +31,11 @@ class PlaintextApplicator : public virtual GrammarApplicator {
 public:
 	bool add_tags = false;
 
-	PlaintextApplicator(UFILE *ux_err);
-	void runGrammarOnText(istream& input, UFILE *output);
+	PlaintextApplicator(std::ostream& ux_err);
+	void runGrammarOnText(std::istream& input, std::ostream& output);
 
-	void printCohort(Cohort *cohort, UFILE *output);
-	void printSingleWindow(SingleWindow *window, UFILE *output);
+	void printCohort(Cohort* cohort, std::ostream& output);
+	void printSingleWindow(SingleWindow* window, std::ostream& output);
 };
 }
 

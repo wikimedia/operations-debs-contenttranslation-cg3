@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2007-2017, GrammarSoft ApS
+ * Copyright (C) 2007-2018, GrammarSoft ApS
  * Developed by Tino Didriksen <mail@tinodidriksen.com>
  * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
  *
@@ -34,7 +34,7 @@
 
 using CG3::CG3Quit;
 
-void endProgram(char *name) {
+void endProgram(char* name) {
 	if (name != NULL) {
 		fprintf(stdout, "VISL CG-3 Compiler version %u.%u.%u.%u\n",
 		  CG3_VERSION_MAJOR, CG3_VERSION_MINOR, CG3_VERSION_PATCH, CG3_REVISION);
@@ -44,8 +44,7 @@ void endProgram(char *name) {
 	exit(EXIT_FAILURE);
 }
 
-int main(int argc, char *argv[]) {
-	UFILE *ux_stderr = 0;
+int main(int argc, char* argv[]) {
 	UErrorCode status = U_ZERO_ERROR;
 
 	if (argc != 3) {
@@ -61,16 +60,12 @@ int main(int argc, char *argv[]) {
 	status = U_ZERO_ERROR;
 
 	ucnv_setDefaultName("UTF-8");
-	const char *codepage_default = ucnv_getDefaultName();
 	uloc_setDefault("en_US_POSIX", &status);
-	const char *locale_default = uloc_getDefault();
-
-	ux_stderr = u_finit(stderr, locale_default, codepage_default);
 
 	CG3::Grammar grammar;
 
-	CG3::IGrammarParser *parser = 0;
-	FILE *input = fopen(argv[1], "rb");
+	std::unique_ptr<CG3::IGrammarParser> parser;
+	FILE* input = fopen(argv[1], "rb");
 
 	if (!input) {
 		std::cerr << "Error: Error opening " << argv[1] << " for reading!" << std::endl;
@@ -87,12 +82,12 @@ int main(int argc, char *argv[]) {
 		CG3Quit(1);
 	}
 	else {
-		parser = new CG3::TextualParser(grammar, ux_stderr);
+		parser.reset(new CG3::TextualParser(grammar, std::cerr));
 	}
 
-	grammar.ux_stderr = ux_stderr;
+	grammar.ux_stderr = &std::cerr;
 
-	if (parser->parse_grammar_from_file(argv[1], locale_default, codepage_default)) {
+	if (parser->parse_grammar(argv[1])) {
 		std::cerr << "Error: Grammar could not be parsed - exiting!" << std::endl;
 		CG3Quit(1);
 	}
@@ -110,17 +105,15 @@ int main(int argc, char *argv[]) {
 		std::cerr << "Grammar has dependency rules." << std::endl;
 	}
 
-	FILE *gout = fopen(argv[2], "wb");
+	FILE* gout = fopen(argv[2], "wb");
 
 	if (gout) {
-		CG3::BinaryGrammar writer(grammar, ux_stderr);
+		CG3::BinaryGrammar writer(grammar, std::cerr);
 		writer.writeBinaryGrammar(gout);
 	}
 	else {
 		std::cerr << "Could not write grammar to " << argv[2] << std::endl;
 	}
-
-	u_fclose(ux_stderr);
 
 	u_cleanup();
 

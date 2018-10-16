@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -29,11 +29,11 @@
 
 namespace CG3 {
 
-Tag *GrammarApplicator::makeBaseFromWord(uint32_t tag) {
+Tag* GrammarApplicator::makeBaseFromWord(uint32_t tag) {
 	return makeBaseFromWord(single_tags.find(tag)->second);
 }
 
-Tag *GrammarApplicator::makeBaseFromWord(Tag *tag) {
+Tag* GrammarApplicator::makeBaseFromWord(Tag* tag) {
 	const size_t len = tag->tag.size();
 	if (len < 5) {
 		return tag;
@@ -42,12 +42,12 @@ Tag *GrammarApplicator::makeBaseFromWord(Tag *tag) {
 	n.clear();
 	n.resize(len - 2);
 	n[0] = n[len - 3] = '"';
-	u_strncpy(&n[1], tag->tag.c_str() + 2, len - 4);
-	Tag *nt = addTag(n);
+	u_strncpy(&n[1], tag->tag.c_str() + 2, static_cast<int32_t>(len - 4));
+	Tag* nt = addTag(n);
 	return nt;
 }
 
-bool GrammarApplicator::isChildOf(const Cohort *child, const Cohort *parent) {
+bool GrammarApplicator::isChildOf(const Cohort* child, const Cohort* parent) {
 	bool retval = false;
 
 	if (parent->global_number == child->global_number) {
@@ -58,7 +58,7 @@ bool GrammarApplicator::isChildOf(const Cohort *child, const Cohort *parent) {
 	}
 	else {
 		size_t i = 0;
-		for (const Cohort *inner = child; i < 1000; ++i) {
+		for (const Cohort* inner = child; i < 1000; ++i) {
 			if (inner->dep_parent == 0 || inner->dep_parent == DEP_NO_PARENT) {
 				retval = false;
 				break;
@@ -87,7 +87,7 @@ bool GrammarApplicator::isChildOf(const Cohort *child, const Cohort *parent) {
 	return retval;
 }
 
-bool GrammarApplicator::wouldParentChildLoop(const Cohort *parent, const Cohort *child) {
+bool GrammarApplicator::wouldParentChildLoop(const Cohort* parent, const Cohort* child) {
 	bool retval = false;
 
 	if (parent->global_number == child->global_number) {
@@ -104,7 +104,7 @@ bool GrammarApplicator::wouldParentChildLoop(const Cohort *parent, const Cohort 
 	}
 	else {
 		size_t i = 0;
-		for (const Cohort *inner = parent; i < 1000; ++i) {
+		for (const Cohort* inner = parent; i < 1000; ++i) {
 			if (inner->dep_parent == 0 || inner->dep_parent == DEP_NO_PARENT) {
 				retval = false;
 				break;
@@ -133,7 +133,7 @@ bool GrammarApplicator::wouldParentChildLoop(const Cohort *parent, const Cohort 
 	return retval;
 }
 
-bool GrammarApplicator::wouldParentChildCross(const Cohort *parent, const Cohort *child) {
+bool GrammarApplicator::wouldParentChildCross(const Cohort* parent, const Cohort* child) {
 	uint32_t mn = std::min(parent->global_number, child->global_number);
 	uint32_t mx = std::max(parent->global_number, child->global_number);
 
@@ -208,15 +208,15 @@ void GrammarApplicator::reflowDependencyWindow(uint32_t max) {
 	else if (gWindow->dep_window.find(0) == gWindow->dep_window.end()) {
 		// This has to be done in 2 steps or it will segfault on Linux for some reason...
 		// Turns out g++ evaluates left side of = first, and MSVC++ does right side first, so g++ accessed its own newly created [0] at .begin()
-		Cohort *tmp = gWindow->dep_window.begin()->second->parent->cohorts[0];
+		Cohort* tmp = gWindow->dep_window.begin()->second->parent->cohorts[0];
 		gWindow->dep_window[0] = tmp;
 	}
 	if (gWindow->cohort_map.empty()) {
 		gWindow->cohort_map[0] = gWindow->current->cohorts[0];
 	}
 	else if (gWindow->cohort_map.find(0) == gWindow->cohort_map.end()) {
-		Cohort *tmp = gWindow->current->cohorts[0];
-		Cohort *c = gWindow->cohort_map.begin()->second;
+		Cohort* tmp = gWindow->current->cohorts[0];
+		Cohort* c = gWindow->cohort_map.begin()->second;
 		if (c->parent) {
 			tmp = c->parent->cohorts[0];
 		}
@@ -231,7 +231,7 @@ void GrammarApplicator::reflowDependencyWindow(uint32_t max) {
 
 		auto end = begin;
 		for (; end != gWindow->dep_window.end(); ++end) {
-			Cohort *cohort = end->second;
+			Cohort* cohort = end->second;
 			if (cohort->type & CT_DEP_DONE) {
 				continue;
 			}
@@ -254,7 +254,7 @@ void GrammarApplicator::reflowDependencyWindow(uint32_t max) {
 
 		gWindow->dep_map[0] = 0;
 		for (; begin != end; ++begin) {
-			Cohort *cohort = begin->second;
+			Cohort* cohort = begin->second;
 			if (max && cohort->global_number >= max) {
 				break;
 			}
@@ -293,7 +293,7 @@ void GrammarApplicator::reflowRelationWindow(uint32_t max) {
 		max = gWindow->next.back()->cohorts[1]->global_number;
 	}
 
-	Cohort *cohort = gWindow->current->cohorts[1];
+	Cohort* cohort = gWindow->current->cohorts[1];
 	while (cohort->prev) {
 		cohort = cohort->prev;
 	}
@@ -351,10 +351,10 @@ void GrammarApplicator::reflowReading(Reading& reading) {
 	reading.rehash();
 }
 
-Tag *GrammarApplicator::generateVarstringTag(const Tag *tag) {
+Tag* GrammarApplicator::generateVarstringTag(const Tag* tag) {
 	static UnicodeString tmp;
 	tmp.remove();
-	tmp.append(tag->tag.c_str(), tag->tag.size());
+	tmp.append(tag->tag.c_str(), static_cast<int32_t>(tag->tag.size()));
 	bool did_something = false;
 
 	// Replace unified sets with their matching tags
@@ -440,7 +440,7 @@ Tag *GrammarApplicator::generateVarstringTag(const Tag *tag) {
 		tmp += 'r';
 	}
 
-	const UChar *nt = tmp.getTerminatedBuffer();
+	const UChar* nt = tmp.getTerminatedBuffer();
 	if (!did_something && u_strcmp(nt, tag->tag.c_str()) == 0) {
 		u_fprintf(ux_stderr, "Warning: Unable to generate from tag '%S'! Possibly missing KEEPORDER and/or capturing regex from grammar on line %u before input line %u.\n", tag->tag.c_str(), grammar->lines, numLines);
 		u_fflush(ux_stderr);
@@ -449,11 +449,11 @@ Tag *GrammarApplicator::generateVarstringTag(const Tag *tag) {
 }
 
 uint32_t GrammarApplicator::addTagToReading(Reading& reading, uint32_t utag, bool rehash) {
-	Tag *tag = single_tags.find(utag)->second;
+	Tag* tag = single_tags.find(utag)->second;
 	return addTagToReading(reading, tag, rehash);
 }
 
-uint32_t GrammarApplicator::addTagToReading(Reading& reading, Tag *tag, bool rehash) {
+uint32_t GrammarApplicator::addTagToReading(Reading& reading, Tag* tag, bool rehash) {
 	if (tag->type & T_VARSTRING) {
 		tag = generateVarstringTag(tag);
 	}
@@ -569,7 +569,7 @@ void GrammarApplicator::delTagFromReading(Reading& reading, uint32_t utag) {
 	reading.parent->type &= ~CT_NUM_CURRENT;
 }
 
-void GrammarApplicator::delTagFromReading(Reading& reading, Tag *tag) {
+void GrammarApplicator::delTagFromReading(Reading& reading, Tag* tag) {
 	return delTagFromReading(reading, tag->hash);
 }
 
@@ -592,7 +592,7 @@ bool GrammarApplicator::unmapReading(Reading& reading, const uint32_t rule) {
 
 void GrammarApplicator::splitMappings(TagList& mappings, Cohort& cohort, Reading& reading, bool mapped) {
 	for (TagList::iterator it = mappings.begin(); it != mappings.end();) {
-		Tag *& tag = *it;
+		Tag*& tag = *it;
 		while (tag->type & T_VARSTRING) {
 			tag = generateVarstringTag(tag);
 		}
@@ -610,7 +610,7 @@ void GrammarApplicator::splitMappings(TagList& mappings, Cohort& cohort, Reading
 		delTagFromReading(reading, reading.mapping->hash);
 	}
 
-	Tag *tag = mappings.back();
+	Tag* tag = mappings.back();
 	mappings.pop_back();
 	size_t i = mappings.size();
 	for (auto ttag : mappings) {
@@ -625,9 +625,9 @@ void GrammarApplicator::splitMappings(TagList& mappings, Cohort& cohort, Reading
 		if (found) {
 			continue;
 		}
-		Reading *nr = alloc_reading(reading);
+		Reading* nr = alloc_reading(reading);
 		nr->mapped = mapped;
-		nr->number = reading.number - i--;
+		nr->number = static_cast<uint32_t>(reading.number - i--);
 		uint32_t mp = addTagToReading(*nr, ttag);
 		if (mp != ttag->hash) {
 			nr->mapping = single_tags.find(mp)->second;
@@ -674,7 +674,7 @@ void GrammarApplicator::splitAllMappings(all_mappings_t& all_mappings, Cohort& c
 }
 
 void GrammarApplicator::mergeReadings(ReadingList& readings) {
-	static bc::flat_map<uint32_t, std::pair<uint32_t, Reading*> > mapped;
+	static bc::flat_map<uint32_t, std::pair<uint32_t, Reading*>> mapped;
 	mapped.clear();
 	mapped.reserve(readings.size());
 	static bc::flat_map<uint32_t, ReadingList> mlist;
@@ -683,6 +683,9 @@ void GrammarApplicator::mergeReadings(ReadingList& readings) {
 
 	for (auto r : readings) {
 		uint32_t hp = r->hash_plain, hplain = r->hash_plain;
+		if (ordered) {
+			hp = hplain = r->tags_string_hash;
+		}
 		uint32_t nm = 0;
 		if (trace) {
 			for (auto iter_hb : r->hit_by) {
@@ -692,10 +695,16 @@ void GrammarApplicator::mergeReadings(ReadingList& readings) {
 		if (r->mapping) {
 			++nm;
 		}
-		Reading *sub = r->next;
+		Reading* sub = r->next;
 		while (sub) {
-			hp = hash_value(sub->hash_plain, hp);
-			hplain = hash_value(sub->hash_plain, hplain);
+			if (ordered) {
+				hp = hash_value(sub->tags_string_hash, hp);
+				hplain = hash_value(sub->tags_string_hash, hplain);
+			}
+			else {
+				hp = hash_value(sub->hash_plain, hp);
+				hplain = hash_value(sub->hash_plain, hplain);
+			}
 			if (trace) {
 				for (auto iter_hb : sub->hit_by) {
 					hp = hash_value(iter_hb, hp);
@@ -726,9 +735,9 @@ void GrammarApplicator::mergeReadings(ReadingList& readings) {
 	static std::vector<Reading*> order;
 	order.clear();
 
-	for (auto miter = mlist.begin(); miter != mlist.end(); miter++) {
-		const ReadingList& clist = miter->second;
-		Reading *nr = alloc_reading(*(clist.front()));
+	for (auto& miter : mlist) {
+		const ReadingList& clist = miter.second;
+		Reading* nr = alloc_reading(*(clist.front()));
 		if (nr->mapping) {
 			erase(nr->tags_list, nr->mapping->hash);
 		}
@@ -753,8 +762,8 @@ void GrammarApplicator::mergeMappings(Cohort& cohort) {
 	}
 }
 
-Cohort *GrammarApplicator::delimitAt(SingleWindow& current, Cohort *cohort) {
-	SingleWindow *nwin = 0;
+Cohort* GrammarApplicator::delimitAt(SingleWindow& current, Cohort* cohort) {
+	SingleWindow* nwin = 0;
 	if (current.parent->current == &current) {
 		nwin = current.parent->allocPushSingleWindow();
 	}
@@ -783,11 +792,11 @@ Cohort *GrammarApplicator::delimitAt(SingleWindow& current, Cohort *cohort) {
 	nwin->has_enclosures = current.has_enclosures;
 
 	current.parent->cohort_counter++;
-	Cohort *cCohort = alloc_cohort(nwin);
+	Cohort* cCohort = alloc_cohort(nwin);
 	cCohort->global_number = 0;
 	cCohort->wordform = tag_begin;
 
-	Reading *cReading = alloc_reading(cCohort);
+	Reading* cReading = alloc_reading(cCohort);
 	cReading->baseform = begintag;
 	insert_if_exists(cReading->parent->possible_sets, grammar->sets_any);
 	addTagToReading(*cReading, begintag);
@@ -802,7 +811,7 @@ Cohort *GrammarApplicator::delimitAt(SingleWindow& current, Cohort *cohort) {
 		current.cohorts[nc]->parent = nwin;
 		nwin->appendCohort(current.cohorts[nc]);
 	}
-	c = current.cohorts.size() - c;
+	c = static_cast<uint32_t>(current.cohorts.size() - c);
 	for (nc = 0; nc < c - 1; nc++) {
 		current.cohorts.pop_back();
 	}
@@ -821,7 +830,7 @@ void GrammarApplicator::reflowTextuals_Reading(Reading& r) {
 		reflowTextuals_Reading(*r.next);
 	}
 	for (auto it : r.tags) {
-		Tag *tag = single_tags.find(it)->second;
+		Tag* tag = single_tags.find(it)->second;
 		if (tag->type & T_TEXTUAL) {
 			r.tags_textual.insert(it);
 			r.tags_textual_bloom.insert(it);

@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -26,7 +26,7 @@
 namespace CG3 {
 
 constexpr double NUMERIC_MIN = static_cast<double>(-(1ll << 48ll));
-constexpr double NUMERIC_MAX = static_cast<double>((1ll << 48ll)-1);
+constexpr double NUMERIC_MAX = static_cast<double>((1ll << 48ll) - 1);
 constexpr uint32_t CG3_HASH_SEED = 705577479u;
 
 /*
@@ -44,9 +44,9 @@ constexpr uint32_t CG3_HASH_SEED = 705577479u;
 					   +(uint32_t)(((const uint8_t*)(d))[0]) )
 #endif
 
-inline uint32_t SuperFastHash(const char *data, size_t len = 0, uint32_t hash = CG3_HASH_SEED) {
+inline uint32_t SuperFastHash(const char* data, size_t len = 0, uint32_t hash = CG3_HASH_SEED) {
 	if (hash == 0) {
-		hash = len;
+		hash = static_cast<uint32_t>(len);
 	}
 	uint32_t tmp;
 	uint32_t rem;
@@ -101,9 +101,9 @@ inline uint32_t SuperFastHash(const char *data, size_t len = 0, uint32_t hash = 
 	return hash;
 }
 
-inline uint32_t SuperFastHash(const UChar *data, size_t len = 0, uint32_t hash = CG3_HASH_SEED) {
+inline uint32_t SuperFastHash(const UChar* data, size_t len = 0, uint32_t hash = CG3_HASH_SEED) {
 	if (hash == 0) {
-		hash = len;
+		hash = static_cast<uint32_t>(len);
 	}
 	uint32_t tmp;
 	uint32_t rem;
@@ -148,7 +148,7 @@ inline uint32_t SuperFastHash(const UChar *data, size_t len = 0, uint32_t hash =
 	return hash;
 }
 
-inline uint32_t hash_value(const UChar *str, uint32_t hash = 0, size_t len = 0) {
+inline uint32_t hash_value(const UChar* str, uint32_t hash = 0, size_t len = 0) {
 	if (hash == 0) {
 		hash = CG3_HASH_SEED;
 	}
@@ -159,10 +159,10 @@ inline uint32_t hash_value(const UChar *str, uint32_t hash = 0, size_t len = 0) 
 }
 
 inline uint32_t hash_value(const UString& str, uint32_t h = 0) {
-	return hash_value(str.c_str(), h, str.length());
+	return hash_value(str.c_str(), h, str.size());
 }
 
-inline uint32_t hash_value(const char *str, uint32_t hash = 0, size_t len = 0) {
+inline uint32_t hash_value(const char* str, uint32_t hash = 0, size_t len = 0) {
 	if (hash == 0) {
 		hash = CG3_HASH_SEED;
 	}
@@ -212,7 +212,7 @@ inline bool ISSPACE(const UChar c) {
 	return (c == 0x20 || c == 0x09 || c == 0x0A || c == 0x0D || c == 0xA0 || u_isWhitespace(c));
 }
 
-inline bool ISSTRING(const UChar *p, const uint32_t c) {
+inline bool ISSTRING(const UChar* p, const uint32_t c) {
 	if (*(p - 1) == '"' && *(p + c + 1) == '"') {
 		return true;
 	}
@@ -229,10 +229,10 @@ inline bool ISNL(const UChar c) {
 	  || c == 0x000CL // Form Feed
 	  || c == 0x000BL // Vertical Tab
 	  || c == 0x000AL // ASCII \n
-	  );
+	);
 }
 
-inline bool ISESC(const UChar *p) {
+inline bool ISESC(const UChar* p) {
 	uint32_t a = 1;
 	while (*(p - a) && *(p - a) == '\\') {
 		a++;
@@ -240,12 +240,12 @@ inline bool ISESC(const UChar *p) {
 	return (a % 2 == 0);
 }
 
-inline bool ISSPACE(const UChar *p) {
+inline bool ISSPACE(const UChar* p) {
 	return ISSPACE(*p) && !ISESC(p);
 }
 
 template<typename C, size_t N>
-inline bool IS_ICASE(const UChar *p, const C (&uc)[N], const C (&lc)[N]) {
+inline bool IS_ICASE(const UChar* p, const C (&uc)[N], const C (&lc)[N]) {
 	// N - 1 due to null terminator for string constants
 	if (ISSTRING(p, N - 1)) {
 		return false;
@@ -258,14 +258,14 @@ inline bool IS_ICASE(const UChar *p, const C (&uc)[N], const C (&lc)[N]) {
 	return true;
 }
 
-inline void BACKTONL(UChar *& p) {
+inline void BACKTONL(UChar*& p) {
 	while (*p && !ISNL(*p) && (*p != ';' || ISESC(p))) {
 		p--;
 	}
 	++p;
 }
 
-inline uint32_t SKIPLN(UChar *& p) {
+inline uint32_t SKIPLN(UChar*& p) {
 	while (*p && !ISNL(*p)) {
 		++p;
 	}
@@ -273,7 +273,7 @@ inline uint32_t SKIPLN(UChar *& p) {
 	return 1;
 }
 
-inline uint32_t SKIPWS(UChar *& p, const UChar a = 0, const UChar b = 0, const bool allowhash = false) {
+inline uint32_t SKIPWS(UChar*& p, const UChar a = 0, const UChar b = 0, const bool allowhash = false) {
 	uint32_t s = 0;
 	while (*p && *p != a && *p != b) {
 		if (ISNL(*p)) {
@@ -291,7 +291,7 @@ inline uint32_t SKIPWS(UChar *& p, const UChar a = 0, const UChar b = 0, const b
 	return s;
 }
 
-inline uint32_t SKIPTOWS(UChar *& p, const UChar a = 0, const bool allowhash = false, const bool allowscol = false) {
+inline uint32_t SKIPTOWS(UChar*& p, const UChar a = 0, const bool allowhash = false, const bool allowscol = false) {
 	uint32_t s = 0;
 	while (*p && !ISSPACE(p)) {
 		if (!allowhash && *p == '#' && !ISESC(p)) {
@@ -313,7 +313,7 @@ inline uint32_t SKIPTOWS(UChar *& p, const UChar a = 0, const bool allowhash = f
 	return s;
 }
 
-inline uint32_t SKIPTO(UChar *& p, const UChar a) {
+inline uint32_t SKIPTO(UChar*& p, const UChar a) {
 	uint32_t s = 0;
 	while (*p && (*p != a || ISESC(p))) {
 		if (ISNL(*p)) {
@@ -324,7 +324,7 @@ inline uint32_t SKIPTO(UChar *& p, const UChar a) {
 	return s;
 }
 
-inline void SKIPTO_NOSPAN(UChar *& p, const UChar a) {
+inline void SKIPTO_NOSPAN(UChar*& p, const UChar a) {
 	while (*p && (*p != a || ISESC(p))) {
 		if (ISNL(*p)) {
 			break;
@@ -333,7 +333,7 @@ inline void SKIPTO_NOSPAN(UChar *& p, const UChar a) {
 	}
 }
 
-inline void SKIPTO_NOSPAN_RAW(UChar *& p, const UChar a) {
+inline void SKIPTO_NOSPAN_RAW(UChar*& p, const UChar a) {
 	while (*p && *p != a) {
 		if (ISNL(*p)) {
 			break;
@@ -342,7 +342,7 @@ inline void SKIPTO_NOSPAN_RAW(UChar *& p, const UChar a) {
 	}
 }
 
-inline void CG3Quit(const int32_t c = 0, const char *file = 0, const uint32_t line = 0) {
+inline void CG3Quit(const int32_t c = 0, const char* file = 0, const uint32_t line = 0) {
 	if (file && line) {
 		std::cerr << std::flush;
 		std::cerr << "CG3Quit triggered from " << file << " line " << line << "." << std::endl;
@@ -354,8 +354,8 @@ inline constexpr uint64_t make_64(uint32_t hi, uint32_t low) {
 	return (static_cast<uint64_t>(hi) << 32) | static_cast<uint64_t>(low);
 }
 
-template <typename T, size_t N>
-inline constexpr size_t size(T(&)[N]) {
+template<typename T, size_t N>
+inline constexpr size_t size(T (&)[N]) {
 	return N;
 }
 
@@ -364,7 +364,7 @@ inline bool index_matches(const Cont& index, const VT& entry) {
 	return (index.find(entry) != index.end());
 }
 
-inline void insert_if_exists(boost::dynamic_bitset<>& cont, const boost::dynamic_bitset<> *other) {
+inline void insert_if_exists(boost::dynamic_bitset<>& cont, const boost::dynamic_bitset<>* other) {
 	if (other && !other->empty()) {
 		cont.resize(std::max(cont.size(), other->size()));
 		cont |= *other;
@@ -381,7 +381,7 @@ inline void readRaw(S& stream, T& value) {
 	stream.read(reinterpret_cast<char*>(&value), sizeof(T));
 }
 
-inline void writeUTF8String(std::ostream& output, const UChar *str, size_t len = 0) {
+inline void writeUTF8String(std::ostream& output, const UChar* str, size_t len = 0) {
 	if (len == 0) {
 		len = u_strlen(str);
 	}
@@ -389,7 +389,7 @@ inline void writeUTF8String(std::ostream& output, const UChar *str, size_t len =
 	std::vector<char> buffer(len * 4);
 	int32_t olen = 0;
 	UErrorCode status = U_ZERO_ERROR;
-	u_strToUTF8(&buffer[0], len * 4 - 1, &olen, str, len, &status);
+	u_strToUTF8(&buffer[0], static_cast<int32_t>(len * 4 - 1), &olen, str, static_cast<int32_t>(len), &status);
 
 	uint16_t cs = static_cast<uint16_t>(olen);
 	writeRaw(output, cs);
@@ -397,7 +397,7 @@ inline void writeUTF8String(std::ostream& output, const UChar *str, size_t len =
 }
 
 inline void writeUTF8String(std::ostream& output, const UString& str) {
-	writeUTF8String(output, str.c_str(), str.length());
+	writeUTF8String(output, str.c_str(), str.size());
 }
 
 template<typename S>
@@ -511,15 +511,15 @@ inline double readSwapped(std::istream& stream) {
 #endif
 
 template<typename Cont>
-inline void GAppSetOpts_ranged(const char *value, Cont& cont, bool fill = true) {
+inline void GAppSetOpts_ranged(const char* value, Cont& cont, bool fill = true) {
 	cont.clear();
 	bool had_range = false;
 
-	const char *comma = value;
+	const char* comma = value;
 	do {
 		uint32_t low = abs(atoi(comma)), high = low;
-		const char *delim = strchr(comma, '-');
-		const char *nextc = strchr(comma, ',');
+		const char* delim = strchr(comma, '-');
+		const char* nextc = strchr(comma, ',');
 		if (delim && (nextc == 0 || nextc > delim)) {
 			had_range = true;
 			high = abs(atoi(delim + 1));
@@ -613,14 +613,14 @@ public:
 	}
 
 private:
-	T *p;
+	T* p;
 };
 
 template<typename T>
-inline T *reverse(T *head) {
-	T *nr = 0;
+inline T* reverse(T* head) {
+	T* nr = 0;
 	while (head) {
-		T *next = head->next;
+		T* next = head->next;
 		head->next = nr;
 		nr = head;
 		head = next;
@@ -633,7 +633,7 @@ inline void erase(Cont& cont, const T& val) {
 	cont.erase(std::remove(cont.begin(), cont.end(), val), cont.end());
 }
 
-inline size_t fread_throw(void *buffer, size_t size, size_t count, FILE *stream) {
+inline size_t fread_throw(void* buffer, size_t size, size_t count, FILE* stream) {
 	size_t rv = ::fread(buffer, size, count, stream);
 	if (rv != count) {
 		throw std::runtime_error("fread() did not read all requested objects");
@@ -641,7 +641,14 @@ inline size_t fread_throw(void *buffer, size_t size, size_t count, FILE *stream)
 	return rv;
 }
 
-inline size_t fwrite_throw(const void *buffer, size_t size, size_t count, FILE *stream) {
+inline size_t fread_throw(void* buffer, size_t size, size_t count, std::istream& stream) {
+	if (!stream.read(static_cast<char*>(buffer), size * count)) {
+		throw std::runtime_error("stream did not read all requested objects");
+	}
+	return size * count;
+}
+
+inline size_t fwrite_throw(const void* buffer, size_t size, size_t count, FILE* stream) {
 	size_t rv = ::fwrite(buffer, size, count, stream);
 	if (rv != count) {
 		throw std::runtime_error("fwrite() did not write all requested objects");
@@ -665,7 +672,7 @@ void pool_put(Pool& pool, Var& var) {
 }
 
 template<typename Pool, typename Var>
-void pool_get(Pool& pool, Var *& var) {
+void pool_get(Pool& pool, Var*& var) {
 	var = 0;
 	if (!pool.empty()) {
 		var = pool.back();
@@ -684,7 +691,7 @@ typename Pool::value_type pool_get(Pool& pool) {
 }
 
 template<typename Pool, typename Var>
-void pool_put(Pool& pool, Var *var) {
+void pool_put(Pool& pool, Var* var) {
 	var->clear();
 	pool.push_back(var);
 }
@@ -699,8 +706,8 @@ struct pool_cleaner {
 	}
 
 	~pool_cleaner() {
-		for (size_t i = 0; i < pool.size(); ++i) {
-			delete pool[i];
+		for (auto p : pool) {
+			delete p;
 		}
 	}
 };

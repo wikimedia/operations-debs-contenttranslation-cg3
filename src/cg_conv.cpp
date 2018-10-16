@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -22,6 +22,7 @@
 #include "stdafx.hpp"
 #include "Grammar.hpp"
 #include "FormatConverter.hpp"
+#include "streambuf.hpp"
 
 #include "version.hpp"
 
@@ -30,11 +31,8 @@ using namespace Options;
 using namespace std;
 using CG3::CG3Quit;
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
 	UErrorCode status = U_ZERO_ERROR;
-	UFILE *ux_stdin = 0;
-	UFILE *ux_stdout = 0;
-	UFILE *ux_stderr = 0;
 
 	/* Initialize ICU */
 	u_init(&status);
@@ -47,7 +45,7 @@ int main(int argc, char *argv[]) {
 	argc = u_parseArgs(argc, argv, NUM_OPTIONS, options);
 
 	if (argc < 0 || options[HELP1].doesOccur || options[HELP2].doesOccur) {
-		FILE *out = (argc < 0) ? stderr : stdout;
+		FILE* out = (argc < 0) ? stderr : stdout;
 		fprintf(out, "Usage: cg-conv [OPTIONS]\n");
 		fprintf(out, "\n");
 		fprintf(out, "Options:\n");
@@ -89,26 +87,28 @@ int main(int argc, char *argv[]) {
 	}
 
 	ucnv_setDefaultName("UTF-8");
-	const char *codepage_default = ucnv_getDefaultName();
+	const char* codepage_default = ucnv_getDefaultName();
 	uloc_setDefault("en_US_POSIX", &status);
-	const char *locale_default = uloc_getDefault();
-
-	ux_stdin = u_finit(stdin, locale_default, codepage_default);
-	ux_stdout = u_finit(stdout, locale_default, codepage_default);
-	ux_stderr = u_finit(stderr, locale_default, codepage_default);
 
 	CG3::Grammar grammar;
 
-	grammar.ux_stderr = ux_stderr;
+	if (options[ORDERED].doesOccur) {
+		grammar.ordered = true;
+	}
+
+	grammar.ux_stderr = &std::cerr;
 	grammar.allocateDummySet();
 	grammar.delimiters = grammar.allocateSet();
 	grammar.addTagToSet(grammar.allocateTag(CG3::stringbits[0].getTerminatedBuffer()), grammar.delimiters);
 	grammar.reindex();
 
-	CG3::FormatConverter applicator(ux_stderr);
+	CG3::FormatConverter applicator(std::cerr);
 	applicator.setGrammar(&grammar);
 
-	std::unique_ptr<CG3::istream> instream;
+	ux_stripBOM(std::cin);
+
+	std::istream* instream = &std::cin;
+	std::unique_ptr<std::istream> _instream;
 
 	CG3::CG_FORMATS fmt = CG3::FMT_INVALID;
 
@@ -134,15 +134,53 @@ int main(int argc, char *argv[]) {
 	}
 
 	if (options[IN_AUTO].doesOccur || fmt == CG3::FMT_INVALID) {
-		CG3::UString buffer;
-		buffer.resize(1000);
-		int32_t nr = u_file_read(&buffer[0], buffer.size(), ux_stdin);
+		constexpr auto BUF_SIZE = 1000;
+
+		std::string buf8(BUF_SIZE, 0);
+		std::cin.read(&buf8[0], BUF_SIZE - 4);
+		auto sz = static_cast<size_t>(std::cin.gcount());
+		if (buf8[sz - 1] & 0x80) {
+			for (size_t i = sz - 1; ; --i) {
+				if ((buf8[i] & 0xF0) == 0xF0) {
+					i = sz - 1 - i;
+					if (!std::cin.read(&buf8[sz], 3 - i)) {
+						throw std::runtime_error("Could not read expected bytes from stream");
+					}
+					sz += 3 - i;
+					break;
+				}
+				else if ((buf8[i] & 0xE0) == 0xE0) {
+					i = sz - 1 - i;
+					if (!std::cin.read(&buf8[sz], 2 - i)) {
+						throw std::runtime_error("Could not read expected bytes from stream");
+					}
+					sz += 2 - i;
+					break;
+				}
+				else if ((buf8[i] & 0xC0) == 0xC0) {
+					i = sz - 1 - i;
+					if (!std::cin.read(&buf8[sz], 1 - i)) {
+						throw std::runtime_error("Could not read expected bytes from stream");
+					}
+					sz += 1 - i;
+					break;
+				}
+			}
+		}
+		buf8.resize(sz);
+
+		CG3::UString buffer(BUF_SIZE, 0);
+		int32_t nr = 0;
+		u_strFromUTF8(&buffer[0], BUF_SIZE, &nr, buf8.c_str(), static_cast<int32_t>(sz), &status);
+		if (U_FAILURE(status)) {
+			throw std::runtime_error("UTF-8 to UTF-16 conversion failed");
+		}
 		buffer.resize(nr);
-		URegularExpression *rx = 0;
+		URegularExpression* rx = 0;
 
 		for (;;) {
 			rx = uregex_openC("^\"<[^>]+>\".*?^\\s+\"[^\"]+\"", UREGEX_DOTALL | UREGEX_MULTILINE, 0, &status);
-			uregex_setText(rx, buffer.c_str(), buffer.size(), &status);
+			uregex_setText(rx, buffer.c_str(), static_cast<int32_t>(buffer.size()), &status);
 			if (uregex_find(rx, -1, &status)) {
 				fmt = CG3::FMT_CG;
 				break;
@@ -150,7 +188,7 @@ int main(int argc, char *argv[]) {
 			uregex_close(rx);
 
 			rx = uregex_openC("^\\S+ *\t *\\[\\S+\\]", UREGEX_DOTALL | UREGEX_MULTILINE, 0, &status);
-			uregex_setText(rx, buffer.c_str(), buffer.size(), &status);
+			uregex_setText(rx, buffer.c_str(), static_cast<int32_t>(buffer.size()), &status);
 			if (uregex_find(rx, -1, &status)) {
 				fmt = CG3::FMT_NICELINE;
 				break;
@@ -158,7 +196,7 @@ int main(int argc, char *argv[]) {
 			uregex_close(rx);
 
 			rx = uregex_openC("^\\S+ *\t *\"\\S+\"", UREGEX_DOTALL | UREGEX_MULTILINE, 0, &status);
-			uregex_setText(rx, buffer.c_str(), buffer.size(), &status);
+			uregex_setText(rx, buffer.c_str(), static_cast<int32_t>(buffer.size()), &status);
 			if (uregex_find(rx, -1, &status)) {
 				fmt = CG3::FMT_NICELINE;
 				break;
@@ -166,7 +204,7 @@ int main(int argc, char *argv[]) {
 			uregex_close(rx);
 
 			rx = uregex_openC("\\^[^/]+(/[^<]+(<[^>]+>)+)+\\$", UREGEX_DOTALL | UREGEX_MULTILINE, 0, &status);
-			uregex_setText(rx, buffer.c_str(), buffer.size(), &status);
+			uregex_setText(rx, buffer.c_str(), static_cast<int32_t>(buffer.size()), &status);
 			if (uregex_find(rx, -1, &status)) {
 				fmt = CG3::FMT_APERTIUM;
 				break;
@@ -174,7 +212,7 @@ int main(int argc, char *argv[]) {
 			uregex_close(rx);
 
 			rx = uregex_openC("^\\S+\t\\S+(\\+\\S+)+$", UREGEX_DOTALL | UREGEX_MULTILINE, 0, &status);
-			uregex_setText(rx, buffer.c_str(), buffer.size(), &status);
+			uregex_setText(rx, buffer.c_str(), static_cast<int32_t>(buffer.size()), &status);
 			if (uregex_find(rx, -1, &status)) {
 				fmt = CG3::FMT_FST;
 				break;
@@ -185,10 +223,8 @@ int main(int argc, char *argv[]) {
 		}
 		uregex_close(rx);
 
-		instream.reset(new CG3::istream_buffer(ux_stdin, buffer));
-	}
-	else {
-		instream.reset(new CG3::istream(ux_stdin));
+		_instream.reset(new std::istream(new CG3::bstreambuf(std::cin, std::move(buf8))));
+		instream = _instream.get();
 	}
 
 	applicator.setInputFormat(fmt);
@@ -197,27 +233,27 @@ int main(int argc, char *argv[]) {
 		grammar.sub_readings_ltr = true;
 	}
 	if (options[MAPPING_PREFIX].doesOccur) {
-		size_t sn = strlen(options[MAPPING_PREFIX].value);
+		auto sn = static_cast<int32_t>(strlen(options[MAPPING_PREFIX].value));
 		CG3::UString buf(sn * 3, 0);
-		UConverter *conv = ucnv_open(codepage_default, &status);
-		ucnv_toUChars(conv, &buf[0], buf.size(), options[MAPPING_PREFIX].value, sn, &status);
+		UConverter* conv = ucnv_open(codepage_default, &status);
+		ucnv_toUChars(conv, &buf[0], static_cast<int32_t>(buf.size()), options[MAPPING_PREFIX].value, sn, &status);
 		ucnv_close(conv);
 		grammar.mapping_prefix = buf[0];
 	}
 	if (options[SUB_DELIMITER].doesOccur) {
-		size_t sn = strlen(options[SUB_DELIMITER].value);
+		auto sn = static_cast<int32_t>(strlen(options[SUB_DELIMITER].value));
 		applicator.sub_delims.resize(sn * 2);
-		UConverter *conv = ucnv_open(codepage_default, &status);
-		sn = ucnv_toUChars(conv, &applicator.sub_delims[0], applicator.sub_delims.size(), options[SUB_DELIMITER].value, sn, &status);
+		UConverter* conv = ucnv_open(codepage_default, &status);
+		sn = ucnv_toUChars(conv, &applicator.sub_delims[0], static_cast<int32_t>(applicator.sub_delims.size()), options[SUB_DELIMITER].value, sn, &status);
 		applicator.sub_delims.resize(sn);
 		applicator.sub_delims += '+';
 		ucnv_close(conv);
 	}
 	if (options[FST_WTAG].doesOccur) {
-		size_t sn = strlen(options[FST_WTAG].value);
+		auto sn = static_cast<int32_t>(strlen(options[FST_WTAG].value));
 		applicator.wtag.resize(sn * 2);
-		UConverter *conv = ucnv_open(codepage_default, &status);
-		sn = ucnv_toUChars(conv, &applicator.wtag[0], applicator.wtag.size(), options[FST_WTAG].value, sn, &status);
+		UConverter* conv = ucnv_open(codepage_default, &status);
+		sn = ucnv_toUChars(conv, &applicator.wtag[0], static_cast<int32_t>(applicator.wtag.size()), options[FST_WTAG].value, sn, &status);
 		applicator.wtag.resize(sn);
 		ucnv_close(conv);
 	}
@@ -238,11 +274,9 @@ int main(int argc, char *argv[]) {
 	}
 
 	applicator.is_conv = true;
+	applicator.trace = true;
 	applicator.verbosity_level = 0;
-	applicator.runGrammarOnText(*instream.get(), ux_stdout);
-
-	u_fclose(ux_stdout);
-	u_fclose(ux_stderr);
+	applicator.runGrammarOnText(*instream, std::cout);
 
 	u_cleanup();
 }

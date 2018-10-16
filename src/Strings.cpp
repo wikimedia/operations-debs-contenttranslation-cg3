@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -116,6 +116,9 @@ UnicodeString keywords[KEYWORD_COUNT] = {
 	UNICODE_STRING_SIMPLE("REOPEN-MAPPINGS"),
 	UNICODE_STRING_SIMPLE("SUBREADINGS"),
 	UNICODE_STRING_SIMPLE("SPLITCOHORT"),
+	UNICODE_STRING_SIMPLE("PROTECT"),
+	UNICODE_STRING_SIMPLE("UNPROTECT"),
+	UNICODE_STRING_SIMPLE("MERGECOHORTS"),
 };
 
 constexpr UChar _S_SET_ISECT_U[] = { L'\u2229', 0 };
@@ -199,10 +202,12 @@ UnicodeString stringbits[STRINGS_COUNT] = {
 	UNICODE_STRING_SIMPLE("strict-secondary"),
 	UNICODE_STRING_SIMPLE("strict-regex"),
 	UNICODE_STRING_SIMPLE("strict-icase"),
+	UNICODE_STRING_SIMPLE("self-no-barrier"),
+	UNICODE_STRING_SIMPLE("ordered"),
 	UNICODE_STRING_SIMPLE("<STREAMCMD:SETVAR:"),
 	UNICODE_STRING_SIMPLE("<STREAMCMD:REMVAR:"),
 };
 
-std::vector<std::vector<UChar> > gbuffers(NUM_GBUFFERS, std::vector<UChar>(CG3_BUFFER_SIZE, 0));
+std::vector<std::vector<UChar>> gbuffers(NUM_GBUFFERS, std::vector<UChar>(CG3_BUFFER_SIZE, 0));
 std::vector<std::string> cbuffers(NUM_CBUFFERS, std::string(CG3_BUFFER_SIZE, 0));
 }

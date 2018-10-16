@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -36,7 +36,7 @@
 
 using CG3::CG3Quit;
 
-void endProgram(char *name) {
+void endProgram(char* name) {
 	using namespace std;
 	fprintf(stdout, "VISL CG-3 Disambiguator version %u.%u.%u.%u\n",
 	  CG3_VERSION_MAJOR, CG3_VERSION_MINOR, CG3_VERSION_PATCH, CG3_REVISION);
@@ -79,7 +79,7 @@ void endProgram(char *name) {
 	exit(EXIT_FAILURE);
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
 	bool trace = false;
 	bool wordform_case = false;
 	bool print_word_forms = true;
@@ -88,12 +88,9 @@ int main(int argc, char *argv[]) {
 	int sections = 0;
 	int stream_format = 1;
 	bool null_flush = false;
-	char *single_rule = 0;
+	std::string single_rule;
 
 	UErrorCode status = U_ZERO_ERROR;
-	UFILE *ux_stdin = 0;
-	UFILE *ux_stdout = 0;
-	UFILE *ux_stderr = 0;
 
 #if HAVE_GETOPT_LONG
 	struct option long_options[] = {
@@ -145,8 +142,8 @@ int main(int argc, char *argv[]) {
 		case 'r': {
 			// strdup() is Posix
 			size_t len = strlen(optarg) + 1;
-			single_rule = new char[len];
-			std::copy(optarg, optarg + len, single_rule);
+			single_rule.reserve(len);
+			std::copy(optarg, optarg + len, std::back_inserter(single_rule));
 			break;
 		}
 		case 's':
@@ -189,13 +186,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	ucnv_setDefaultName("UTF-8");
-	const char *codepage_default = ucnv_getDefaultName();
 	uloc_setDefault("en_US_POSIX", &status);
-	const char *locale_default = uloc_getDefault();
-
-	ux_stdin = u_finit(stdin, locale_default, codepage_default);
-	ux_stdout = u_finit(stdout, locale_default, codepage_default);
-	ux_stderr = u_finit(stderr, locale_default, codepage_default);
 
 	CG3::Grammar grammar;
 
@@ -209,10 +200,8 @@ int main(int argc, char *argv[]) {
 	}
 	//*/
 
-	CG3::IGrammarParser *parser = 0;
-
 	if (optind <= (argc - 1)) {
-		FILE *in = fopen(argv[optind], "rb");
+		FILE* in = fopen(argv[optind], "rb");
 		if (in == NULL || ferror(in)) {
 			endProgram(argv[0]);
 		}
@@ -226,62 +215,69 @@ int main(int argc, char *argv[]) {
 	else {
 		endProgram(argv[0]);
 	}
+
+	std::istream* ux_stdin = &std::cin;
+	std::unique_ptr<std::ifstream> _ux_stdin;
 	if (optind <= (argc - 2)) {
-		u_fclose(ux_stdin);
-		ux_stdin = u_fopen(argv[optind + 1], "rb", locale_default, codepage_default);
-		if (ux_stdin == NULL) {
+		_ux_stdin.reset(new std::ifstream(argv[optind + 1], std::ios::binary));
+
+		if (!_ux_stdin || _ux_stdin->bad()) {
 			endProgram(argv[0]);
 		}
-	}
-	if (optind <= (argc - 3)) {
-		u_fclose(ux_stdout);
-		ux_stdout = u_fopen(argv[optind + 2], "wb", locale_default, codepage_default);
-		if (ux_stdout == NULL) {
-			endProgram(argv[0]);
-		}
+		ux_stdin = _ux_stdin.get();
 	}
 
+	std::ostream* ux_stdout = &std::cout;
+	std::unique_ptr<std::ofstream> _ux_stdout;
+	if (optind <= (argc - 3)) {
+		_ux_stdout.reset(new std::ofstream(argv[optind + 2], std::ios::binary));
+
+		if (!_ux_stdout || _ux_stdout->bad()) {
+			endProgram(argv[0]);
+		}
+		ux_stdout = _ux_stdout.get();
+	}
+
+	std::unique_ptr<CG3::IGrammarParser> parser;
 	if (CG3::cbuffers[0][0] == 'C' && CG3::cbuffers[0][1] == 'G' && CG3::cbuffers[0][2] == '3' && CG3::cbuffers[0][3] == 'B') {
-		parser = new CG3::BinaryGrammar(grammar, ux_stderr);
+		parser.reset(new CG3::BinaryGrammar(grammar, std::cerr));
 	}
 	else {
 		// Forbidding text grammars makes debugging very annoying
 		std::cerr << "Warning: Text grammar detected - to better process textual" << std::endl;
 		std::cerr << "grammars, use `vislcg3'; to compile this grammar, use `cg-comp'" << std::endl;
-		parser = new CG3::TextualParser(grammar, ux_stderr);
+		parser.reset(new CG3::TextualParser(grammar, std::cerr));
 	}
 
-	grammar.ux_stderr = ux_stderr;
+	grammar.ux_stderr = &std::cerr;
 
-	if (parser->parse_grammar_from_file(argv[optind], locale_default, codepage_default)) {
+	if (parser->parse_grammar(argv[optind])) {
 		std::cerr << "Error: Grammar could not be parsed - exiting!" << std::endl;
 		CG3Quit(1);
 	}
 
 	grammar.reindex();
 
-	delete parser;
-
-	CG3::GrammarApplicator *applicator = 0;
+	std::unique_ptr<CG3::GrammarApplicator> applicator;
 
 	if (stream_format == 0) {
-		applicator = new CG3::GrammarApplicator(ux_stderr);
+		applicator.reset(new CG3::GrammarApplicator(std::cerr));
 	}
 	else if (stream_format == 2) {
-		CG3::MatxinApplicator *matxinApplicator = new CG3::MatxinApplicator(ux_stderr);
+		CG3::MatxinApplicator* matxinApplicator = new CG3::MatxinApplicator(std::cerr);
 		matxinApplicator->setNullFlush(null_flush);
 		matxinApplicator->wordform_case = wordform_case;
 		matxinApplicator->print_word_forms = print_word_forms;
 		matxinApplicator->print_only_first = only_first;
-		applicator = matxinApplicator;
+		applicator.reset(matxinApplicator);
 	}
 	else {
-		CG3::ApertiumApplicator *apertiumApplicator = new CG3::ApertiumApplicator(ux_stderr);
+		CG3::ApertiumApplicator* apertiumApplicator = new CG3::ApertiumApplicator(std::cerr);
 		apertiumApplicator->setNullFlush(null_flush);
 		apertiumApplicator->wordform_case = wordform_case;
 		apertiumApplicator->print_word_forms = print_word_forms;
 		apertiumApplicator->print_only_first = only_first;
-		applicator = apertiumApplicator;
+		applicator.reset(apertiumApplicator);
 	}
 
 	applicator->setGrammar(&grammar);
@@ -294,27 +290,22 @@ int main(int argc, char *argv[]) {
 	applicator->unique_tags = false;
 
 	// This is if we want to run a single rule  (-r option)
-	if (single_rule) {
-		size_t sn = strlen(single_rule);
-		UChar *buf = new UChar[sn * 3];
-		buf[0] = 0;
-		buf[sn] = 0;
-		u_charsToUChars(single_rule, buf, sn);
+	if (!single_rule.empty()) {
+		auto sn = static_cast<int32_t>(single_rule.size());
+		CG3::UString buf(sn * 3, 0);
+		u_charsToUChars(single_rule.c_str(), &buf[0], sn);
 		for (auto rule : applicator->grammar->rule_by_number) {
 			if (rule->name == buf) {
 				applicator->valid_rules.push_back(rule->number);
 			}
 		}
-		delete[] buf;
 	}
-	delete[] single_rule;
 
 	try {
 		switch (cmd) {
 		case 'd':
 		default:
-			CG3::istream instream(ux_stdin, !null_flush);
-			applicator->runGrammarOnText(instream, ux_stdout);
+			applicator->runGrammarOnText(*ux_stdin, *ux_stdout);
 			break;
 		}
 	}
@@ -322,11 +313,6 @@ int main(int argc, char *argv[]) {
 		std::cerr << e.what();
 		exit(1);
 	}
-
-	delete applicator;
-
-	u_fclose(ux_stdout);
-	u_fclose(ux_stderr);
 
 	u_cleanup();
 }

@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -30,29 +30,34 @@ class ContextualTest;
 
 class BinaryGrammar : public IGrammarParser {
 public:
-	BinaryGrammar(Grammar& result, UFILE *ux_err);
+	BinaryGrammar(Grammar& result, std::ostream& ux_err);
 
-	int writeBinaryGrammar(FILE *output);
-	int readBinaryGrammar(FILE *input);
+	int writeBinaryGrammar(FILE* output);
 
 	void setCompatible(bool compat);
 	void setVerbosity(uint32_t level);
-	int parse_grammar_from_file(const char *filename, const char *locale, const char *codepage);
+	int parse_grammar(std::istream& input);
+	int parse_grammar(const char* buffer, size_t length);
+	int parse_grammar(const UChar* buffer, size_t length);
+	int parse_grammar(const std::string& buffer);
+	int parse_grammar(const char* filename);
 
 private:
-	Grammar *grammar;
-	void writeContextualTest(ContextualTest *t, FILE *output);
-	ContextualTest *readContextualTest(FILE *input);
+	int parse_grammar(UString& buffer);
+
+	Grammar* grammar;
+	void writeContextualTest(ContextualTest* t, FILE* output);
+	ContextualTest* readContextualTest(std::istream& input);
 
 	typedef std::unordered_map<ContextualTest*, uint32_t> deferred_t;
 	deferred_t deferred_tmpls;
-	typedef std::unordered_map<ContextualTest*, std::vector<uint32_t> > deferred_ors_t;
+	typedef std::unordered_map<ContextualTest*, std::vector<uint32_t>> deferred_ors_t;
 	deferred_ors_t deferred_ors;
 
 	uint32FlatHashSet seen_uint32;
 
-	int readBinaryGrammar_10043(FILE *input);
-	ContextualTest *readContextualTest_10043(FILE *input);
+	int readBinaryGrammar_10043(std::istream& input);
+	ContextualTest* readContextualTest_10043(std::istream& input);
 };
 }
 

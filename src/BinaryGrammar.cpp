@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -25,9 +25,9 @@
 
 namespace CG3 {
 
-BinaryGrammar::BinaryGrammar(Grammar& res, UFILE *ux_err) {
-	ux_stderr = ux_err;
-	result = &res;
+BinaryGrammar::BinaryGrammar(Grammar& res, std::ostream& ux_err)
+  : IGrammarParser(res, ux_err)
+{
 	grammar = result;
 	verbosity = 0;
 }
@@ -39,7 +39,7 @@ void BinaryGrammar::setVerbosity(uint32_t v) {
 	verbosity = v;
 }
 
-int BinaryGrammar::parse_grammar_from_file(const char *filename, const char*, const char*) {
+int BinaryGrammar::parse_grammar(const char* filename) {
 	if (!grammar) {
 		u_fprintf(ux_stderr, "Error: Cannot parse into nothing - hint: call setResult() before trying.\n");
 		CG3Quit(1);
@@ -56,11 +56,10 @@ int BinaryGrammar::parse_grammar_from_file(const char *filename, const char*, co
 		grammar->grammar_size = static_cast<size_t>(_stat.st_size);
 	}
 
-	FILE *input = fopen(filename, "rb");
-	if (!input) {
-		u_fprintf(ux_stderr, "Error: Error opening %s for reading!\n", filename);
-		CG3Quit(1);
-	}
-	return readBinaryGrammar(input);
+	std::ifstream input;
+	input.exceptions(std::ios::failbit | std::ios::eofbit | std::ios::badbit);
+	input.open(filename, std::ios::binary);
+
+	return parse_grammar(input);
 }
 }

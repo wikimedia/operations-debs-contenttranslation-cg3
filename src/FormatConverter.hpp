@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -43,15 +43,15 @@ enum CG_FORMATS {
 
 class FormatConverter : public ApertiumApplicator, public NicelineApplicator, public PlaintextApplicator, public FSTApplicator, public MatxinApplicator {
 public:
-	FormatConverter(UFILE *ux_err);
+	FormatConverter(std::ostream& ux_err);
 
-	void runGrammarOnText(istream& input, UFILE *output);
+	void runGrammarOnText(std::istream& input, std::ostream& output);
 	void setInputFormat(CG_FORMATS format);
 	void setOutputFormat(CG_FORMATS format);
 
 protected:
 	CG_FORMATS informat, outformat;
-	void printSingleWindow(SingleWindow *window, UFILE *output);
+	void printSingleWindow(SingleWindow* window, std::ostream& output);
 };
 }
 

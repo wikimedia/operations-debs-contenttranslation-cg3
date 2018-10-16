@@ -36,8 +36,7 @@
       with multiple parts do not have to match in-order; (N &lt;civ&gt;) is the same
       as (&lt;civ&gt; N). This is different from previous versions of CG, but I deemed
       it unncecessary to spend extra time checking the tag order when hash lookups can
-      verify the existance so fast. A side effect of this means there is no intersection
-      set operator, nor need of one.
+      verify the existence so fast.
     </para>
   </section>
 
@@ -94,6 +93,11 @@
       Variable string tags are in the form of "string"v, "&lt;string&gt;"v, and &lt;string&gt;v, where variables matching
       $1 through $9 will be replaced with the corresponding group from the regular expression match.
       Multiple occurances of a single variable is allowed, so e.g. "$1$2$1"v would contain group 1 twice.
+    </para>
+    <para>
+      Alternative syntax is prefixing with <code>VSTR:</code>. This is used to build tags that are not textual, or tags
+      that need secondary processing such as regex or case-insensitive matching. E.g., <code>VSTR:@m$1</code> would
+      create a mapping tag or <code>VSTR:"$1.*"r</code> to create a regex tag.
     </para>
     <para>
       One can also manipulate the case of the resulting tag via %U, %u, %L, and %l.
@@ -320,6 +324,31 @@
     </para>
   </section>
 
+  <section id="stream-metadata">
+    <title>Stream Metadata</title>
+    <para>
+      CG-3 will <link linkend="streamformats">store and forward</link> any data between cohorts,
+      attached to the preceding cohort.
+      <code>META:/.../r</code> and <code>META:/.../ri</code> lets you query and capture from this data with regular expressions.
+      Data before the first cohort is not accessible.
+    </para>
+    <screen>
+      ADD (@header) (*) IF (-1 (META:/&lt;h\d+&gt;$/ri)) ;
+    </screen>
+    <para>
+      I recommend keeping META tags in the contextual tests, since they cannot currently be cached and will be checked
+      every time.
+    </para>
+  </section>
+
+  <section id="stream-static-tags">
+    <title>Stream Static Tags</title>
+    <para>
+      In the CG and Apertium stream formats, it is allowed to have tags after the word form / surface form.
+      These tags behave as if they contextually exist in every reading of the cohort - they will not be seen by rule targets.
+    </para>
+  </section>
+
   <section id="global-variables">
     <title>Global Variables</title>
     <para>
@@ -388,6 +417,14 @@
       Once you have a suitable STRICT-TAGS list, you can further trim the grammar by taking advantage the fact that any
       tag listed in STRICT-TAGS may be used as an implicit set that contains only the tag itself.
       No more need for <code>LIST N = N ;</code> constructs.
+    </para>
+  </section>
+
+  <section id="list-tags">
+    <title>LIST-TAGS</title>
+    <para>
+      Very similar to <link linkend="strict-tags">STRICT-TAGS</link>, but only performs the final part of making
+      <code>LIST N = N ;</code> superfluous. Any tag listed in <code>LIST-TAGS</code> has an implicit set created for it.
     </para>
   </section>
 </chapter>

@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -65,7 +65,7 @@ private:
 public:
 	class const_iterator : public std::iterator<std::bidirectional_iterator_tag, T> {
 	private:
-		const Cont *elements;
+		const Cont* elements;
 		ContConstIter it;
 		T t;
 

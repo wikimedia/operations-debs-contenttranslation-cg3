@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -25,6 +25,7 @@
 
 #include "stdafx.hpp"
 #include "Strings.hpp"
+#include <cstdarg>
 
 #ifdef _WIN32
 inline const char *basename(const char *path) {
@@ -49,9 +50,64 @@ inline const char *basename(const char *path) {
 }
 #endif
 
+// Strips 0xEF 0xBB 0xBF from a stream
+inline bool ux_stripBOM(std::istream& stream) {
+	auto a = stream.get();
+	if (a == std::istream::traits_type::eof()) {
+		return false;
+	}
+	if (a != 0xef) {
+		stream.putback(static_cast<char>(a));
+		return false;
+	}
+
+	auto b = stream.get();
+	if (b == std::istream::traits_type::eof()) {
+		stream.putback(static_cast<char>(a));
+		return false;
+	}
+	if (b != 0xbb) {
+		stream.putback(static_cast<char>(b));
+		stream.putback(static_cast<char>(a));
+		return false;
+	}
+
+	auto c = stream.get();
+	if (c == std::istream::traits_type::eof()) {
+		stream.putback(static_cast<char>(b));
+		stream.putback(static_cast<char>(a));
+		return false;
+	}
+	if (c != 0xbf) {
+		stream.putback(static_cast<char>(c));
+		stream.putback(static_cast<char>(b));
+		stream.putback(static_cast<char>(a));
+		return false;
+	}
+
+	return true;
+}
+
+// ICU std::istream input wrappers
+UChar* u_fgets(UChar* s, int32_t n, std::istream& input);
+
+UChar u_fgetc(std::istream& input);
+
+// ICU std::ostream output wrappers
+void u_fflush(std::ostream& output);
+void u_fflush(std::ostream* output);
+
+int32_t u_fprintf(std::ostream& output, const char* fmt, ...);
+int32_t u_fprintf(std::unique_ptr<std::ostream>& output, const char* fmt, ...);
+int32_t u_fprintf(std::ostream* output, const char* fmt, ...);
+
+int32_t u_fprintf_u(std::ostream& output, const UChar* fmt, ...);
+
+UChar32 u_fputc(UChar32 c, std::ostream& output);
+
 namespace CG3 {
 
-inline int ux_isSetOp(const UChar *it) {
+inline int ux_isSetOp(const UChar* it) {
 	switch (it[1]) {
 	case 0:
 		switch (it[0]) {
@@ -95,7 +151,7 @@ inline int ux_isSetOp(const UChar *it) {
 	return S_IGNORE;
 }
 
-inline bool ux_isEmpty(const UChar *text) {
+inline bool ux_isEmpty(const UChar* text) {
 	size_t length = u_strlen(text);
 	if (length > 0) {
 		for (size_t i = 0; i < length; i++) {
@@ -107,7 +163,7 @@ inline bool ux_isEmpty(const UChar *text) {
 	return true;
 }
 
-inline bool ux_simplecasecmp(const UChar *a, const UChar *b, const size_t n) {
+inline bool ux_simplecasecmp(const UChar* a, const UChar* b, const size_t n) {
 	for (size_t i = 0; i < n; ++i) {
 		if (a[i] != b[i] && a[i] != b[i] + 32) {
 			return false;
@@ -116,7 +172,6 @@ inline bool ux_simplecasecmp(const UChar *a, const UChar *b, const size_t n) {
 
 	return true;
 }
-
 
 template<typename Str>
 struct substr_t {
@@ -138,13 +193,13 @@ struct substr_t {
 
 	~substr_t() {
 		if (count != Str::npos) {
-			value_type *buf = const_cast<value_type*>(str.c_str() + offset);
+			value_type* buf = const_cast<value_type*>(str.c_str() + offset);
 			buf[count] = old_value;
 		}
 	}
 
-	const value_type *c_str() const {
-		value_type *buf = const_cast<value_type*>(str.c_str() + offset);
+	const value_type* c_str() const {
+		value_type* buf = const_cast<value_type*>(str.c_str() + offset);
 		buf[count] = 0;
 		return buf;
 	}
@@ -155,7 +210,7 @@ inline substr_t<Str> substr(const Str& str, size_t offset = 0, size_t count = 0)
 	return substr_t<Str>(str, offset, count);
 }
 
-inline UChar *ux_bufcpy(UChar *dst, const UChar *src, size_t n) {
+inline UChar* ux_bufcpy(UChar* dst, const UChar* src, size_t n) {
 	size_t i = 0;
 	for (; i < n && src && src[i]; ++i) {
 		dst[i] = src[i];
@@ -167,7 +222,7 @@ inline UChar *ux_bufcpy(UChar *dst, const UChar *src, size_t n) {
 	return dst;
 }
 
-std::string ux_dirname(const char *in);
+std::string ux_dirname(const char* in);
 }
 
 #endif

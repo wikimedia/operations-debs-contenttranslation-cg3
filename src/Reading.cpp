@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -27,20 +27,20 @@ namespace CG3 {
 ReadingList pool_readings;
 pool_cleaner<ReadingList> cleaner_readings(pool_readings);
 
-Reading *alloc_reading(Cohort *p) {
-	Reading *r = pool_get(pool_readings);
+Reading* alloc_reading(Cohort* p) {
+	Reading* r = pool_get(pool_readings);
 	if (r == 0) {
 		r = new Reading(p);
 	}
 	else {
-		r->number = p ? (p->readings.size() * 1000 + 1000) : 0;
+		r->number = static_cast<uint32_t>(p ? (p->readings.size() * 1000 + 1000) : 0);
 		r->parent = p;
 	}
 	return r;
 }
 
-Reading *alloc_reading(const Reading& o) {
-	Reading *r = pool_get(pool_readings);
+Reading* alloc_reading(const Reading& o) {
+	Reading* r = pool_get(pool_readings);
 	if (r == 0) {
 		r = new Reading(o);
 	}
@@ -50,6 +50,7 @@ Reading *alloc_reading(const Reading& o) {
 		r->noprint = o.noprint;
 		r->matched_target = false;
 		r->matched_tests = false;
+		r->immutable = false;
 		r->baseform = o.baseform;
 		r->hash = o.hash;
 		r->hash_plain = o.hash_plain;
@@ -66,6 +67,8 @@ Reading *alloc_reading(const Reading& o) {
 		r->tags_plain = o.tags_plain;
 		r->tags_textual = o.tags_textual;
 		r->tags_numerical = o.tags_numerical;
+		r->tags_string = o.tags_string;
+		r->tags_string_hash = o.tags_string_hash;
 		if (r->next) {
 			r->next = alloc_reading(*r->next);
 		}
@@ -73,23 +76,24 @@ Reading *alloc_reading(const Reading& o) {
 	return r;
 }
 
-void free_reading(Reading *r) {
+void free_reading(Reading* r) {
 	if (r == 0) {
 		return;
 	}
 	pool_put(pool_readings, r);
 }
 
-Reading::Reading(Cohort *p)
+Reading::Reading(Cohort* p)
   : mapped(false)
   , deleted(false)
   , noprint(false)
   , matched_target(false)
   , matched_tests(false)
+  , immutable(false)
   , baseform(0)
   , hash(0)
   , hash_plain(0)
-  , number(p ? (p->readings.size() * 1000 + 1000) : 0)
+  , number(static_cast<uint32_t>(p ? (p->readings.size() * 1000 + 1000) : 0))
   , mapping(0)
   , parent(p)
   , next(0)
@@ -105,6 +109,7 @@ Reading::Reading(const Reading& r)
   , noprint(r.noprint)
   , matched_target(false)
   , matched_tests(false)
+  , immutable(r.immutable)
   , baseform(r.baseform)
   , hash(r.hash)
   , hash_plain(r.hash_plain)
@@ -121,6 +126,8 @@ Reading::Reading(const Reading& r)
   , tags_plain(r.tags_plain)
   , tags_textual(r.tags_textual)
   , tags_numerical(r.tags_numerical)
+  , tags_string(r.tags_string)
+  , tags_string_hash(r.tags_string_hash)
 {
 	#ifdef CG_TRACE_OBJECTS
 	std::cerr << "OBJECT: " << __PRETTY_FUNCTION__ << std::endl;
@@ -146,6 +153,7 @@ void Reading::clear() {
 	noprint = false;
 	matched_target = false;
 	matched_tests = false;
+	immutable = false;
 	baseform = 0;
 	hash = 0;
 	hash_plain = 0;
@@ -163,13 +171,15 @@ void Reading::clear() {
 	tags_plain.clear();
 	tags_textual.clear();
 	tags_numerical.clear();
+	tags_string.clear();
+	tags_string_hash = 0;
 }
 
-Reading *Reading::allocateReading(Cohort *p) {
+Reading* Reading::allocateReading(Cohort* p) {
 	return alloc_reading(p);
 }
 
-Reading *Reading::allocateReading(const Reading& r) {
+Reading* Reading::allocateReading(const Reading& r) {
 	return alloc_reading(r);
 }
 
@@ -192,7 +202,7 @@ uint32_t Reading::rehash() {
 	return hash;
 }
 
-bool Reading::cmp_number(Reading *a, Reading *b) {
+bool Reading::cmp_number(Reading* a, Reading* b) {
 	return a->number < b->number;
 }
 }

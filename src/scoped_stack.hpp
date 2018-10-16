@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -29,7 +29,7 @@ namespace CG3 {
 template<typename C>
 struct scoped_stack {
 	struct proxy {
-		proxy(scoped_stack *ss)
+		proxy(scoped_stack* ss)
 		  : z(ss->z++)
 		  , ss(ss)
 		{
@@ -43,7 +43,7 @@ struct scoped_stack {
 			--ss->z;
 		}
 
-		C *operator->() {
+		C* operator->() {
 			return &ss->cs[z];
 		}
 
@@ -57,7 +57,7 @@ struct scoped_stack {
 
 	private:
 		size_t z;
-		scoped_stack *ss;
+		scoped_stack* ss;
 	};
 
 	scoped_stack()

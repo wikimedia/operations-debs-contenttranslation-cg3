@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -139,7 +139,7 @@ void ContextualTest::markUsed(Grammar& grammar) {
 	}
 	is_used = true;
 
-	Set *s = 0;
+	Set* s = 0;
 	if (target) {
 		s = grammar.getSet(target);
 		s->markUsed(grammar);

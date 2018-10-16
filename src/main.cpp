@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2007-2017, GrammarSoft ApS
+* Copyright (C) 2007-2018, GrammarSoft ApS
 * Developed by Tino Didriksen <mail@tinodidriksen.com>
 * Design by Eckhard Bick <eckhard.bick@mail.dk>, Tino Didriksen <mail@tinodidriksen.com>
 *
@@ -30,21 +30,17 @@
 #include "options.hpp"
 using namespace Options;
 using CG3::CG3Quit;
-void GAppSetOpts(CG3::GrammarApplicator& applicator, UConverter *conv);
+void GAppSetOpts(CG3::GrammarApplicator& applicator, UConverter* conv);
 
-int main(int argc, char *argv[]) {
-	UFILE *ux_stdin = 0;
-	UFILE *ux_stdout = 0;
-	UFILE *ux_stderr = 0;
-
+int main(int argc, char* argv[]) {
 	clock_t main_timer = clock();
 
 	UErrorCode status = U_ZERO_ERROR;
-	srand((uint32_t)time(0));
+	srand(static_cast<uint32_t>(time(0)));
 
 	U_MAIN_INIT_ARGS(argc, argv);
 	argc = u_parseArgs(argc, argv, NUM_OPTIONS, options);
-	FILE *out = stderr;
+	FILE* out = stderr;
 
 	if (options[VERSION_TOO_OLD].doesOccur) {
 		std::cout << CG3_TOO_OLD << std::endl;
@@ -134,80 +130,58 @@ int main(int argc, char *argv[]) {
 	}
 	status = U_ZERO_ERROR;
 
-	const char *codepage_cli = ucnv_getDefaultName();
+	const char* codepage_cli = ucnv_getDefaultName();
 	ucnv_setDefaultName("UTF-8");
-	const char *codepage_default = ucnv_getDefaultName();
-	const char *codepage_grammar = codepage_default;
-	const char *codepage_input = codepage_grammar;
-	const char *codepage_output = codepage_grammar;
 
-	if (options[CODEPAGE_GRAMMAR].doesOccur) {
-		codepage_grammar = options[CODEPAGE_GRAMMAR].value;
-	}
-	else if (options[CODEPAGE_GLOBAL].doesOccur) {
-		codepage_grammar = options[CODEPAGE_GLOBAL].value;
-	}
-
-	if (options[CODEPAGE_INPUT].doesOccur) {
-		codepage_input = options[CODEPAGE_INPUT].value;
-	}
-	else if (options[CODEPAGE_GLOBAL].doesOccur) {
-		codepage_input = options[CODEPAGE_GLOBAL].value;
-	}
-
-	if (options[CODEPAGE_OUTPUT].doesOccur) {
-		codepage_output = options[CODEPAGE_OUTPUT].value;
-	}
-	else if (options[CODEPAGE_GLOBAL].doesOccur) {
-		codepage_output = options[CODEPAGE_GLOBAL].value;
-	}
-
-	if (options[VERBOSE].doesOccur) {
-		std::cerr << "Codepage: default " << codepage_default << ", input " << codepage_input << ", output " << codepage_output << ", grammar " << codepage_grammar << std::endl;
+	if (options[CODEPAGE_GLOBAL].doesOccur || options[CODEPAGE_INPUT].doesOccur || options[CODEPAGE_OUTPUT].doesOccur || options[CODEPAGE_GRAMMAR].doesOccur) {
+		std::cerr << "Warning: The -C and --codepage-* option are deprecated and now default to UTF-8" << std::endl;
 	}
 
 	uloc_setDefault("en_US_POSIX", &status);
-	const char *locale_default = uloc_getDefault();
 
-	UConverter *conv = ucnv_open(codepage_default, &status);
+	UConverter* conv = ucnv_open(ucnv_getDefaultName(), &status);
 
-	if (!options[STDOUT].doesOccur) {
-		ux_stdout = u_finit(stdout, locale_default, codepage_output);
-	}
-	else {
-		ux_stdout = u_fopen(options[STDOUT].value, "wb", locale_default, codepage_output);
-	}
-	if (!ux_stdout) {
-		std::cerr << "Error: Failed to open the output stream for writing!" << std::endl;
-		CG3Quit(1);
-	}
+	std::ostream* ux_stdout = &std::cout;
+	std::unique_ptr<std::ofstream> _ux_stdout;
+	if (options[STDOUT].doesOccur) {
+		_ux_stdout.reset(new std::ofstream(options[STDOUT].value, std::ios::binary));
 
-	if (!options[STDERR].doesOccur) {
-		ux_stderr = u_finit(stderr, locale_default, codepage_output);
-	}
-	else {
-		ux_stderr = u_fopen(options[STDERR].value, "wb", locale_default, codepage_output);
-	}
-	if (!ux_stdout) {
-		std::cerr << "Error: Failed to open the error stream for writing!" << std::endl;
-		CG3Quit(1);
+		if (!_ux_stdout || _ux_stdout->bad()) {
+			std::cerr << "Error: Failed to open the output stream for writing!" << std::endl;
+			CG3Quit(1);
+		}
+		ux_stdout = _ux_stdout.get();
 	}
 
-	if (!options[STDIN].doesOccur) {
-		ux_stdin = u_finit(stdin, locale_default, codepage_input);
+	std::ostream* ux_stderr = &std::cerr;
+	std::unique_ptr<std::ofstream> _ux_stderr;
+	if (options[STDERR].doesOccur) {
+		_ux_stderr.reset(new std::ofstream(options[STDERR].value, std::ios::binary));
+
+		if (!_ux_stderr || _ux_stderr->bad()) {
+			std::cerr << "Error: Failed to open the error stream for writing!" << std::endl;
+			CG3Quit(1);
+		}
+		ux_stderr = _ux_stderr.get();
 	}
-	else {
+
+	std::istream* ux_stdin = &std::cin;
+	std::unique_ptr<std::ifstream> _ux_stdin;
+	if (options[STDIN].doesOccur) {
 		struct stat info;
 		int serr = stat(options[STDIN].value, &info);
 		if (serr) {
 			std::cerr << "Error: Cannot stat " << options[STDIN].value << " due to error " << serr << "!" << std::endl;
 			CG3Quit(1);
 		}
-		ux_stdin = u_fopen(options[STDIN].value, "rb", locale_default, codepage_input);
-	}
-	if (!ux_stdin) {
-		std::cerr << "Error: Failed to open the input stream for reading!" << std::endl;
-		CG3Quit(1);
+
+		_ux_stdin.reset(new std::ifstream(options[STDIN].value, std::ios::binary));
+
+		if (!_ux_stdin || _ux_stdin->bad()) {
+			std::cerr << "Error: Failed to open the input stream for reading!" << std::endl;
+			CG3Quit(1);
+		}
+		ux_stdin = _ux_stdin.get();
 	}
 
 	CG3::Grammar grammar;
@@ -219,8 +193,8 @@ int main(int argc, char *argv[]) {
 		CG3::Set::dump_hashes_out = ux_stderr;
 	}
 
-	CG3::IGrammarParser *parser = 0;
-	FILE *input = fopen(options[GRAMMAR].value, "rb");
+	std::unique_ptr<CG3::IGrammarParser> parser;
+	FILE* input = fopen(options[GRAMMAR].value, "rb");
 	if (!input) {
 		std::cerr << "Error: Error opening " << options[GRAMMAR].value << " for reading!" << std::endl;
 		CG3Quit(1);
@@ -239,10 +213,10 @@ int main(int argc, char *argv[]) {
 			std::cerr << "Error: --dump-ast is for textual grammars only!" << std::endl;
 			CG3Quit(1);
 		}
-		parser = new CG3::BinaryGrammar(grammar, ux_stderr);
+		parser.reset(new CG3::BinaryGrammar(grammar, *ux_stderr));
 	}
 	else {
-		parser = new CG3::TextualParser(grammar, ux_stderr, options[DUMP_AST].doesOccur != 0);
+		parser.reset(new CG3::TextualParser(grammar, *ux_stderr, options[DUMP_AST].doesOccur != 0));
 	}
 	if (options[VERBOSE].doesOccur) {
 		if (options[VERBOSE].value) {
@@ -264,20 +238,20 @@ int main(int argc, char *argv[]) {
 	}
 	main_timer = clock();
 
-	if (parser->parse_grammar_from_file(options[GRAMMAR].value, locale_default, codepage_grammar)) {
+	if (parser->parse_grammar(options[GRAMMAR].value)) {
 		std::cerr << "Error: Grammar could not be parsed - exiting!" << std::endl;
 		CG3Quit(1);
 	}
 
 	if (options[DUMP_AST].doesOccur) {
-		dynamic_cast<CG3::TextualParser*>(parser)->print_ast(ux_stdout);
+		dynamic_cast<CG3::TextualParser*>(parser.get())->print_ast(*ux_stdout);
 	}
 
 	if (options[MAPPING_PREFIX].doesOccur) {
-		UConverter *conv = ucnv_open(codepage_cli, &status);
+		UConverter* conv = ucnv_open(codepage_cli, &status);
 		size_t sn = strlen(options[MAPPING_PREFIX].value);
 		CG3::UString buf(sn * 3, 0);
-		ucnv_toUChars(conv, &buf[0], buf.size(), options[MAPPING_PREFIX].value, sn, &status);
+		ucnv_toUChars(conv, &buf[0], static_cast<int32_t>(buf.size()), options[MAPPING_PREFIX].value, static_cast<int32_t>(sn), &status);
 		if (grammar.is_binary && grammar.mapping_prefix != buf[0]) {
 			std::cerr << "Error: Mapping prefix must match the one used for compiling the binary grammar!" << std::endl;
 			CG3Quit(1);
@@ -290,8 +264,7 @@ int main(int argc, char *argv[]) {
 	}
 	grammar.reindex(options[SHOW_UNUSED_SETS].doesOccur == 1, options[SHOW_TAGS].doesOccur == 1);
 
-	delete parser;
-	parser = 0;
+	parser.reset();
 
 	if (options[VERBOSE].doesOccur) {
 		std::cerr << "Parsing grammar took " << (clock() - main_timer) / (double)CLOCKS_PER_SEC << " seconds." << std::endl;
@@ -329,11 +302,10 @@ int main(int argc, char *argv[]) {
 	}
 
 	if (!options[GRAMMAR_ONLY].doesOccur) {
-		CG3::GrammarApplicator applicator(ux_stderr);
+		CG3::GrammarApplicator applicator(*ux_stderr);
 		applicator.setGrammar(&grammar);
 		GAppSetOpts(applicator, conv);
-		CG3::istream instream(ux_stdin);
-		applicator.runGrammarOnText(instream, ux_stdout);
+		applicator.runGrammarOnText(*ux_stdin, *ux_stdout);
 
 		if (options[VERBOSE].doesOccur) {
 			std::cerr << "Applying grammar on input took " << (clock() - main_timer) / (double)CLOCKS_PER_SEC << " seconds." << std::endl;
@@ -349,7 +321,7 @@ int main(int argc, char *argv[]) {
 			}
 		}
 		reverse_foreach (br, bad) {
-			CG3::Rule *r = grammar.rule_by_number[*br];
+			CG3::Rule* r = grammar.rule_by_number[*br];
 			grammar.rule_by_number.erase(grammar.rule_by_number.begin() + *br);
 			grammar.destroyRule(r);
 		}
@@ -368,7 +340,7 @@ int main(int argc, char *argv[]) {
 			grammar.rule_by_number.erase(grammar.rule_by_number.begin() + (*br)->number);
 		}
 		for (auto br : bad) {
-			br->number = grammar.rule_by_number.size();
+			br->number = static_cast<uint32_t>(grammar.rule_by_number.size());
 			grammar.rule_by_number.push_back(br);
 		}
 		std::cerr << "Optimizer moved " << bad.size() << " rules." << std::endl;
@@ -377,9 +349,9 @@ int main(int argc, char *argv[]) {
 	}
 
 	if (options[GRAMMAR_OUT].doesOccur) {
-		UFILE *gout = u_fopen(options[GRAMMAR_OUT].value, "w", locale_default, codepage_output);
+		std::ofstream gout(options[GRAMMAR_OUT].value, std::ios::binary);
 		if (gout) {
-			CG3::GrammarWriter writer(grammar, ux_stderr);
+			CG3::GrammarWriter writer(grammar, *ux_stderr);
 			if (options[STATISTICS].doesOccur) {
 				writer.statistics = true;
 			}
@@ -396,9 +368,9 @@ int main(int argc, char *argv[]) {
 	}
 
 	if (options[GRAMMAR_BIN].doesOccur) {
-		FILE *gout = fopen(options[GRAMMAR_BIN].value, "wb");
+		FILE* gout = fopen(options[GRAMMAR_BIN].value, "wb");
 		if (gout) {
-			CG3::BinaryGrammar writer(grammar, ux_stderr);
+			CG3::BinaryGrammar writer(grammar, *ux_stderr);
 			writer.writeBinaryGrammar(gout);
 
 			if (options[VERBOSE].doesOccur) {
@@ -411,10 +383,7 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	u_fclose(ux_stdout);
-	u_fclose(ux_stderr);
 	ucnv_close(conv);
-
 	u_cleanup();
 
 	if (options[VERBOSE].doesOccur) {
@@ -424,7 +393,7 @@ int main(int argc, char *argv[]) {
 	return status;
 }
 
-void GAppSetOpts(CG3::GrammarApplicator& applicator, UConverter *conv) {
+void GAppSetOpts(CG3::GrammarApplicator& applicator, UConverter* conv) {
 	if (options[ALWAYS_SPAN].doesOccur) {
 		applicator.always_span = true;
 	}
@@ -503,17 +472,14 @@ void GAppSetOpts(CG3::GrammarApplicator& applicator, UConverter *conv) {
 		else {
 			UErrorCode status = U_ZERO_ERROR;
 			size_t sn = strlen(options[RULE].value);
-			UChar *buf = new UChar[sn * 3];
-			buf[0] = 0;
-			ucnv_toUChars(conv, buf, sn * 3, options[RULE].value, sn, &status);
+			CG3::UString buf(sn * 3, 0);
+			ucnv_toUChars(conv, &buf[0], static_cast<int32_t>(sn * 3), options[RULE].value, static_cast<int32_t>(sn), &status);
 
 			for (auto rule : applicator.grammar->rule_by_number) {
 				if (rule->name == buf) {
 					applicator.valid_rules.push_back(rule->number);
 				}
 			}
-
-			delete[] buf;
 		}
 	}
 	if (options[VERBOSE].doesOccur) {
