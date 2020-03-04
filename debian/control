@@ -4,10 +4,11 @@ Priority: optional
 Maintainer: Debian Science Team <debian-science-maintainers@lists.alioth.debian.org>
 Uploaders: Tino Didriksen <tino@didriksen.cc>,
            Kartik Mistry <kartik@debian.org>
-Build-Depends: cmake (>= 2.8.9),
+Build-Depends: cmake,
                debhelper (>= 9.0),
-               libboost-dev (>= 1.53.0),
-               libicu-dev (>= 4.8)
+               libboost-dev,
+               libicu-dev,
+               swig
 Standards-Version: 3.9.8
 Homepage: https://visl.sdu.dk/cg3.html
 Vcs-Git: https://salsa.debian.org/science-team/cg3.git
@@ -31,6 +32,17 @@ Description: Tools for using the 3rd edition of Constraint Grammar (CG-3)
  dependency markup, target language lemma choice for MT, QA systems, and
  much more. The core idea is that you choose what to do based on the whole
  available context, as opposed to n-grams.
+ .
+ See https://visl.sdu.dk/cg3.html for more documentation
+
+Package: cg3-dev
+Architecture: all
+Depends: cg3 (>= ${binary:Version}),
+         libcg3-dev (>= ${binary:Version}),
+         ${misc:Depends},
+         ${shlibs:Depends}
+Description: Metapackage providing both CG-3 CLI dev tools and dev library
+ Development files to use the CG-3 CLI tools and library API.
  .
  See https://visl.sdu.dk/cg3.html for more documentation
 
