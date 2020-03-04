@@ -36,16 +36,16 @@ struct trie_node_t {
 
 	trie_node_t()
 	  : terminal(false)
-	  , trie(0)
+	  , trie(nullptr)
 	{
 	}
 
 	/*
-		// Due to how flat_map works with copying elements around, let's not do cleanup the usual way
-		~trie_node_t() {
-			delete trie;
-		}
-		//*/
+	// Due to how flat_map works with copying elements around, let's not do cleanup the usual way
+	~trie_node_t() {
+		delete trie;
+	}
+	//*/
 };
 
 inline bool trie_insert(trie_t& trie, const TagVector& tv, size_t w = 0) {
@@ -63,13 +63,13 @@ inline bool trie_insert(trie_t& trie, const TagVector& tv, size_t w = 0) {
 	node.terminal = true;
 	if (node.trie) {
 		delete node.trie;
-		node.trie = 0;
+		node.trie = nullptr;
 	}
 	return true;
 }
 
 inline trie_t* _trie_copy_helper(const trie_t& trie) {
-	trie_t* nt = new trie_t;
+	auto nt = new trie_t;
 	for (auto& p : trie) {
 		(*nt)[p.first].terminal = p.second.terminal;
 		if (p.second.trie) {
@@ -95,7 +95,7 @@ inline void trie_delete(trie_t& trie) {
 		if (p.second.trie) {
 			trie_delete(*p.second.trie);
 			delete p.second.trie;
-			p.second.trie = 0;
+			p.second.trie = nullptr;
 		}
 	}
 }
@@ -170,15 +170,15 @@ inline bool trie_getTagList(const trie_t& trie, TagList& theTags, const void* no
 }
 
 /*
-	inline void trie_getTagList(const trie_t& trie, TagVector& theTags) {
-		for (auto& kv : trie) {
-			theTags.push_back(kv.first);
-			if (kv.second.trie) {
-				trie_getTagList(*kv.second.trie, theTags);
-			}
+inline void trie_getTagList(const trie_t& trie, TagVector& theTags) {
+	for (auto& kv : trie) {
+		theTags.push_back(kv.first);
+		if (kv.second.trie) {
+			trie_getTagList(*kv.second.trie, theTags);
 		}
 	}
-	//*/
+}
+//*/
 
 inline TagVector trie_getTagList(const trie_t& trie) {
 	TagVector theTags;

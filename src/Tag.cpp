@@ -26,7 +26,7 @@
 
 namespace CG3 {
 
-std::ostream* Tag::dump_hashes_out = 0;
+std::ostream* Tag::dump_hashes_out = nullptr;
 
 Tag::Tag()
   : comparison_op(OP_NOP)
@@ -39,7 +39,7 @@ Tag::Tag()
   , plain_hash(0)
   , number(0)
   , seed(0)
-  , regexp(0)
+  , regexp(nullptr)
 {
 	#ifdef CG_TRACE_OBJECTS
 	std::cerr << "OBJECT: " << __PRETTY_FUNCTION__ << std::endl;
@@ -58,7 +58,7 @@ Tag::Tag(const Tag& o)
   , number(o.number)
   , seed(o.seed)
   , tag(o.tag)
-  , regexp(0)
+  , regexp(nullptr)
 {
 	#ifdef CG_TRACE_OBJECTS
 	std::cerr << "OBJECT: " << __PRETTY_FUNCTION__ << std::endl;
@@ -85,7 +85,7 @@ Tag::~Tag() {
 
 	if (regexp) {
 		uregex_close(regexp);
-		regexp = 0;
+		regexp = nullptr;
 	}
 }
 
@@ -122,8 +122,7 @@ void Tag::parseTagRaw(const UChar* to, Grammar* grammar) {
 		}
 	}
 	for (auto iter : grammar->icase_tags) {
-		UErrorCode status = U_ZERO_ERROR;
-		if (u_strCaseCompare(tag.c_str(), static_cast<int32_t>(tag.size()), iter->tag.c_str(), static_cast<int32_t>(iter->tag.size()), U_FOLD_CASE_DEFAULT, &status) == 0) {
+		if (ux_strCaseCompare(tag, iter->tag)) {
 			type |= T_TEXTUAL;
 		}
 	}
@@ -135,7 +134,7 @@ void Tag::parseTagRaw(const UChar* to, Grammar* grammar) {
 		if (u_sscanf(tag.c_str(), "#%i->%i", &dep_self, &dep_parent) == 2 && dep_self != 0) {
 			type |= T_DEPENDENCY;
 		}
-		constexpr UChar local_dep_unicode[] = { '#', '%', 'i', L'\u2192', '%', 'i', 0 };
+		constexpr UChar local_dep_unicode[] = { '#', '%', 'i', u'\u2192', '%', 'i', 0 };
 		if (u_sscanf_u(tag.c_str(), local_dep_unicode, &dep_self, &dep_parent) == 2 && dep_self != 0) {
 			type |= T_DEPENDENCY;
 		}

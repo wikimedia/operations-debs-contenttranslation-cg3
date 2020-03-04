@@ -38,7 +38,7 @@ Tag* GrammarApplicator::makeBaseFromWord(Tag* tag) {
 	if (len < 5) {
 		return tag;
 	}
-	static UString n;
+	static thread_local UString n;
 	n.clear();
 	n.resize(len - 2);
 	n[0] = n[len - 3] = '"';
@@ -336,7 +336,7 @@ void GrammarApplicator::reflowReading(Reading& reading) {
 	reading.tags_bloom.clear();
 	reading.tags_textual_bloom.clear();
 	reading.tags_plain_bloom.clear();
-	reading.mapping = 0;
+	reading.mapping = nullptr;
 	reading.tags_string.clear();
 
 	insert_if_exists(reading.parent->possible_sets, grammar->sets_any);
@@ -352,17 +352,22 @@ void GrammarApplicator::reflowReading(Reading& reading) {
 }
 
 Tag* GrammarApplicator::generateVarstringTag(const Tag* tag) {
-	static UnicodeString tmp;
+	static thread_local UnicodeString tmp;
 	tmp.remove();
 	tmp.append(tag->tag.c_str(), static_cast<int32_t>(tag->tag.size()));
 	bool did_something = false;
+
+	// Convert %[UuLl] markers to control codes to avoid having combined %$1 accidentally match %L
+	for (size_t i = 0; i < 4; ++i) {
+		tmp.findAndReplace(stringbits[S_VSu_raw + i].c_str(), stringbits[S_VSu + i].c_str());
+	}
 
 	// Replace unified sets with their matching tags
 	if (tag->vs_sets) {
 		for (size_t i = 0; i < tag->vs_sets->size(); ++i) {
 			auto tags = ss_taglist.get();
 			getTagList(*(*tag->vs_sets)[i], tags);
-			static UString rpl;
+			static thread_local UString rpl;
 			rpl.clear();
 			// If there are multiple tags, such as from CompositeTags, put _ between them
 			foreach (iter, *tags) {
@@ -378,29 +383,28 @@ Tag* GrammarApplicator::generateVarstringTag(const Tag* tag) {
 
 	// Replace $1-$9 with their respective match groups
 	for (size_t i = 0; i < regexgrps.first && i < 9; ++i) {
-		tmp.findAndReplace(stringbits[S_VS1 + i], (*regexgrps.second)[i]);
+		tmp.findAndReplace(stringbits[S_VS1 + i].c_str(), (*regexgrps.second)[i]);
 		did_something = true;
 	}
 
 	// Handle %U %u %L %l markers.
-	// ToDo: Split %[UuLl] markers from the main string to avoid having combined %$1 accidentally match %L
 	bool found;
 	do {
 		found = false;
 		int32_t pos = -1, mpos = -1;
-		if ((pos = tmp.lastIndexOf(stringbits[S_VSu].getTerminatedBuffer(), stringbits[S_VSu].length(), 0)) != -1) {
+		if ((pos = tmp.lastIndexOf(stringbits[S_VSu].c_str(), stringbits[S_VSu].size(), 0)) != -1) {
 			found = true;
 			mpos = std::max(mpos, pos);
 		}
-		if ((pos = tmp.lastIndexOf(stringbits[S_VSU].getTerminatedBuffer(), stringbits[S_VSU].length(), mpos)) != -1) {
+		if ((pos = tmp.lastIndexOf(stringbits[S_VSU].c_str(), stringbits[S_VSU].size(), mpos)) != -1) {
 			found = true;
 			mpos = std::max(mpos, pos);
 		}
-		if ((pos = tmp.lastIndexOf(stringbits[S_VSl].getTerminatedBuffer(), stringbits[S_VSl].length(), mpos)) != -1) {
+		if ((pos = tmp.lastIndexOf(stringbits[S_VSl].c_str(), stringbits[S_VSl].size(), mpos)) != -1) {
 			found = true;
 			mpos = std::max(mpos, pos);
 		}
-		if ((pos = tmp.lastIndexOf(stringbits[S_VSL].getTerminatedBuffer(), stringbits[S_VSL].length(), mpos)) != -1) {
+		if ((pos = tmp.lastIndexOf(stringbits[S_VSL].c_str(), stringbits[S_VSL].size(), mpos)) != -1) {
 			found = true;
 			mpos = std::max(mpos, pos);
 		}
@@ -441,7 +445,7 @@ Tag* GrammarApplicator::generateVarstringTag(const Tag* tag) {
 	}
 
 	const UChar* nt = tmp.getTerminatedBuffer();
-	if (!did_something && u_strcmp(nt, tag->tag.c_str()) == 0) {
+	if (!did_something && nt == tag->tag) {
 		u_fprintf(ux_stderr, "Warning: Unable to generate from tag '%S'! Possibly missing KEEPORDER and/or capturing regex from grammar on line %u before input line %u.\n", tag->tag.c_str(), grammar->lines, numLines);
 		u_fflush(ux_stderr);
 	}
@@ -515,7 +519,7 @@ uint32_t GrammarApplicator::addTagToReading(Reading& reading, Tag* tag, bool reh
 			gWindow->relation_map[tag->dep_self] = reading.parent->global_number;
 		}
 		has_relations = true;
-		reading.parent->type |= CT_RELATED;
+		reading.parent->setRelated();
 	}
 	if (!(tag->type & T_SPECIAL)) {
 		reading.tags_plain.insert(tag->hash);
@@ -560,7 +564,7 @@ void GrammarApplicator::delTagFromReading(Reading& reading, uint32_t utag) {
 	reading.tags_numerical.erase(utag);
 	reading.tags_plain.erase(utag);
 	if (reading.mapping && utag == reading.mapping->hash) {
-		reading.mapping = 0;
+		reading.mapping = nullptr;
 	}
 	if (utag == reading.baseform) {
 		reading.baseform = 0;
@@ -653,7 +657,7 @@ void GrammarApplicator::splitAllMappings(all_mappings_t& all_mappings, Cohort& c
 	if (all_mappings.empty()) {
 		return;
 	}
-	static ReadingList readings;
+	static thread_local ReadingList readings;
 	readings = cohort.readings;
 	for (auto reading : readings) {
 		auto iter = all_mappings.find(reading);
@@ -674,10 +678,10 @@ void GrammarApplicator::splitAllMappings(all_mappings_t& all_mappings, Cohort& c
 }
 
 void GrammarApplicator::mergeReadings(ReadingList& readings) {
-	static bc::flat_map<uint32_t, std::pair<uint32_t, Reading*>> mapped;
+	static thread_local bc::flat_map<uint32_t, std::pair<uint32_t, Reading*>> mapped;
 	mapped.clear();
 	mapped.reserve(readings.size());
-	static bc::flat_map<uint32_t, ReadingList> mlist;
+	static thread_local bc::flat_map<uint32_t, ReadingList> mlist;
 	mlist.clear();
 	mlist.reserve(readings.size());
 
@@ -732,7 +736,7 @@ void GrammarApplicator::mergeReadings(ReadingList& readings) {
 	}
 
 	readings.clear();
-	static std::vector<Reading*> order;
+	static thread_local std::vector<Reading*> order;
 	order.clear();
 
 	for (auto& miter : mlist) {
@@ -763,7 +767,7 @@ void GrammarApplicator::mergeMappings(Cohort& cohort) {
 }
 
 Cohort* GrammarApplicator::delimitAt(SingleWindow& current, Cohort* cohort) {
-	SingleWindow* nwin = 0;
+	SingleWindow* nwin = nullptr;
 	if (current.parent->current == &current) {
 		nwin = current.parent->allocPushSingleWindow();
 	}

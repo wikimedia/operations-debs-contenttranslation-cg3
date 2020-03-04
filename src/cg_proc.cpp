@@ -192,7 +192,7 @@ int main(int argc, char* argv[]) {
 
 	/* Add a / in front to enable this test...
 	{
-		CG3::ApertiumApplicator a(0);
+		CG3::ApertiumApplicator a;
 		//grammar.sub_readings_ltr = true;
 		a.setGrammar(&grammar);
 		a.testPR(ux_stdout);
@@ -239,7 +239,7 @@ int main(int argc, char* argv[]) {
 	}
 
 	std::unique_ptr<CG3::IGrammarParser> parser;
-	if (CG3::cbuffers[0][0] == 'C' && CG3::cbuffers[0][1] == 'G' && CG3::cbuffers[0][2] == '3' && CG3::cbuffers[0][3] == 'B') {
+	if (CG3::is_cg3b(CG3::cbuffers[0])) {
 		parser.reset(new CG3::BinaryGrammar(grammar, std::cerr));
 	}
 	else {

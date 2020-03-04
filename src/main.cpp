@@ -205,7 +205,7 @@ int main(int argc, char* argv[]) {
 	}
 	fclose(input);
 
-	if (CG3::cbuffers[0][0] == 'C' && CG3::cbuffers[0][1] == 'G' && CG3::cbuffers[0][2] == '3' && CG3::cbuffers[0][3] == 'B') {
+	if (CG3::is_cg3b(CG3::cbuffers[0])) {
 		if (options[VERBOSE].doesOccur) {
 			std::cerr << "Info: Binary grammar detected." << std::endl;
 		}
@@ -449,6 +449,9 @@ void GAppSetOpts(CG3::GrammarApplicator& applicator, UConverter* conv) {
 	if (options[TRACE_ENCL].doesOccur) {
 		applicator.trace = true;
 		applicator.trace_encl = true;
+	}
+	if (options[PIPE_DELETED].doesOccur) {
+		applicator.pipe_deleted = true;
 	}
 	if (options[DRYRUN].doesOccur) {
 		applicator.dry_run = true;

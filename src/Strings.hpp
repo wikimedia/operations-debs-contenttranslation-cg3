@@ -150,10 +150,10 @@ enum : uint32_t {
 	S_VS7,
 	S_VS8,
 	S_VS9,
-	S_VSu,
-	S_VSU,
-	S_VSl,
-	S_VSL,
+	S_VSu_raw,
+	S_VSU_raw,
+	S_VSl_raw,
+	S_VSL_raw,
 	S_GPREFIX,
 	S_POSITIVE,
 	S_NEGATIVE,
@@ -177,6 +177,11 @@ enum : uint32_t {
 	S_ORDERED,
 	S_CMD_SETVAR,
 	S_CMD_REMVAR,
+	S_STATIC,
+	S_VSu,
+	S_VSU,
+	S_VSl,
+	S_VSL,
 	STRINGS_COUNT,
 };
 
@@ -218,17 +223,17 @@ enum : uint32_t {
 #include "stdafx.hpp"
 
 namespace CG3 {
-extern UnicodeString keywords[KEYWORD_COUNT];
-extern UnicodeString stringbits[STRINGS_COUNT];
-extern UnicodeString g_flags[FLAGS_COUNT];
+CG3_IMPORTS extern const UString keywords[KEYWORD_COUNT];
+CG3_IMPORTS extern const UString stringbits[STRINGS_COUNT];
+CG3_IMPORTS extern const UString g_flags[FLAGS_COUNT];
 
 constexpr size_t CG3_BUFFER_SIZE = 8192;
 constexpr size_t NUM_GBUFFERS = 1;
-extern std::vector<std::vector<UChar>> gbuffers;
+CG3_IMPORTS extern std::vector<UString> gbuffers;
 constexpr size_t NUM_CBUFFERS = 1;
-extern std::vector<std::string> cbuffers;
+CG3_IMPORTS extern std::vector<std::string> cbuffers;
 
-constexpr UChar not_sign = L'\u00AC';
+constexpr UChar not_sign = u'\u00AC';
 }
 
 #endif

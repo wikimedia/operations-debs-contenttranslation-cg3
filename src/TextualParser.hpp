@@ -46,13 +46,13 @@ public:
 	int parse_grammar(const std::string& buffer);
 	int parse_grammar(const char* filename);
 
-	void error(const char* str);
-	void error(const char* str, UChar c);
-	void error(const char* str, const UChar* p);
-	void error(const char* str, UChar c, const UChar* p);
-	void error(const char* str, const char* s, const UChar* p);
-	void error(const char* str, const UChar* s, const UChar* p);
-	void error(const char* str, const char* s, const UChar* S, const UChar* p);
+	[[noreturn]] void error(const char* str);
+	[[noreturn]] void error(const char* str, UChar c);
+	[[noreturn]] void error(const char* str, const UChar* p);
+	[[noreturn]] void error(const char* str, UChar c, const UChar* p);
+	[[noreturn]] void error(const char* str, const char* s, const UChar* p);
+	[[noreturn]] void error(const char* str, const UChar* s, const UChar* p);
+	[[noreturn]] void error(const char* str, const char* s, const UChar* S, const UChar* p);
 	Tag* addTag(Tag* tag);
 	Grammar* get_grammar() { return result; }
 	const char* filebase;
@@ -60,7 +60,7 @@ public:
 	uint32SortedVector list_tags;
 
 private:
-	UChar nearbuf[32];
+	UChar nearbuf[32]{};
 	uint32_t verbosity_level;
 	uint32_t sets_counter;
 	uint32_t seen_mapping_prefix;
@@ -68,6 +68,7 @@ private:
 	bool in_section, in_before_sections, in_after_sections, in_null_section;
 	bool no_isets, no_itmpls, strict_wforms, strict_bforms, strict_second, strict_regex = false, strict_icase = false;
 	bool self_no_barrier = false;
+	bool only_sets = false;
 	const char* filename;
 
 	typedef std::unordered_map<ContextualTest*, std::pair<size_t, UString>> deferred_t;
@@ -75,23 +76,24 @@ private:
 	std::vector<std::unique_ptr<UString>> grammarbufs;
 
 	int parse_grammar(UString& buffer);
-	void parseFromUChar(UChar* input, const char* fname = 0);
+	void parseFromUChar(UChar* input, const char* fname = nullptr);
 	void addRuleToGrammar(Rule* rule);
 
-	Tag* parseTag(const UChar* to, const UChar* p = 0);
+	Tag* parseTag(const UChar* to, const UChar* p = nullptr);
+	Tag* parseTag(const UString& to, const UChar* p = nullptr);
 	void parseTagList(UChar*& p, Set* s);
-	Set* parseSet(const UChar* name, const UChar* p = 0);
-	Set* parseSetInline(UChar*& p, Set* s = 0);
+	Set* parseSet(const UChar* name, const UChar* p = nullptr);
+	Set* parseSetInline(UChar*& p, Set* s = nullptr);
 	Set* parseSetInlineWrapper(UChar*& p);
 	void parseContextualTestPosition(UChar*& p, ContextualTest& t);
-	ContextualTest* parseContextualTestList(UChar*& p, Rule* rule = 0);
+	ContextualTest* parseContextualTestList(UChar*& p, Rule* rule = nullptr, bool in_tmpl = false);
 	void parseContextualTests(UChar*& p, Rule* rule);
 	void parseContextualDependencyTests(UChar*& p, Rule* rule);
 	void parseRule(UChar*& p, KEYWORDS key);
 	void parseAnchorish(UChar*& p);
 
 	int error_counter;
-	void incErrorCount();
+	[[noreturn]] void incErrorCount();
 };
 }
 

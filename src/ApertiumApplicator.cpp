@@ -104,14 +104,14 @@ void ApertiumApplicator::runGrammarOnText(std::istream& input, std::ostream& out
 
 	uint32_t resetAfter = ((num_windows + 4) * 2 + 1);
 
-	begintag = addTag(stringbits[S_BEGINTAG].getTerminatedBuffer())->hash; // Beginning of sentence tag
-	endtag = addTag(stringbits[S_ENDTAG].getTerminatedBuffer())->hash;     // End of sentence tag
+	begintag = addTag(stringbits[S_BEGINTAG])->hash; // Beginning of sentence tag
+	endtag = addTag(stringbits[S_ENDTAG])->hash;     // End of sentence tag
 
-	SingleWindow* cSWindow = 0; // Current single window (Cohort frame)
-	Cohort* cCohort = 0;        // Current cohort
-	Reading* cReading = 0;      // Current reading
+	SingleWindow* cSWindow = nullptr; // Current single window (Cohort frame)
+	Cohort* cCohort = nullptr;        // Current cohort
+	Reading* cReading = nullptr;      // Current reading
 
-	SingleWindow* lSWindow = 0; // Left hand single window
+	SingleWindow* lSWindow = nullptr; // Left hand single window
 
 	gWindow->window_span = num_windows;
 	gtimer = getticks();
@@ -181,8 +181,8 @@ void ApertiumApplicator::runGrammarOnText(std::istream& input, std::ostream& out
 
 				cSWindow->appendCohort(cCohort);
 				lSWindow = cSWindow;
-				cSWindow = 0;
-				cCohort = 0;
+				cSWindow = nullptr;
+				cCohort = nullptr;
 				numCohorts++;
 			} // end >= soft_limit
 			if (cCohort && (cSWindow->cohorts.size() >= hard_limit || (grammar->delimiters && doesSetMatchCohortNormal(*cCohort, grammar->delimiters->number)))) {
@@ -196,8 +196,8 @@ void ApertiumApplicator::runGrammarOnText(std::istream& input, std::ostream& out
 
 				cSWindow->appendCohort(cCohort);
 				lSWindow = cSWindow;
-				cSWindow = 0;
-				cCohort = 0;
+				cSWindow = nullptr;
+				cCohort = nullptr;
 				numCohorts++;
 			} // end >= hard_limit
 			// If we don't have a current window, create one
@@ -221,7 +221,7 @@ void ApertiumApplicator::runGrammarOnText(std::istream& input, std::ostream& out
 				lSWindow = cSWindow;
 				lSWindow->text = firstblank;
 				firstblank.clear();
-				cCohort = 0;
+				cCohort = nullptr;
 				numWindows++;
 			} // created at least one cSWindow by now
 
@@ -270,7 +270,7 @@ void ApertiumApplicator::runGrammarOnText(std::istream& input, std::ostream& out
 
 			// We're now at the beginning of the readings
 			UString current_reading;
-			Reading* cReading = 0;
+			Reading* cReading = nullptr;
 
 			// Handle the static reading of ^estació<n><f><sg>/season<n><sg>/station<n><sg>$
 			// Gobble up all <tags> until the first / or $ and stuff them in the static reading
@@ -340,7 +340,7 @@ void ApertiumApplicator::runGrammarOnText(std::istream& input, std::ostream& out
 				}
 
 				if (inchar == '/') { // Reached end of reading
-					Reading* cReading = 0;
+					Reading* cReading = nullptr;
 					cReading = alloc_reading(cCohort);
 
 					addTagToReading(*cReading, cCohort->wordform);
@@ -387,9 +387,9 @@ void ApertiumApplicator::runGrammarOnText(std::istream& input, std::ostream& out
 		for (auto iter : cCohort->readings) {
 			addTagToReading(*iter, endtag);
 		}
-		cReading = 0;
-		cCohort = 0;
-		cSWindow = 0;
+		cReading = nullptr;
+		cCohort = nullptr;
+		cSWindow = nullptr;
 	}
 
 	// Run the grammar & print results
@@ -629,7 +629,7 @@ void ApertiumApplicator::testPR(std::ostream& output) {
 	};
 	for (size_t i = 0; i < 6; ++i) {
 		UString text(texts[i].begin(), texts[i].end());
-		Reading* reading = alloc_reading(0);
+		Reading* reading = alloc_reading();
 		processReading(reading, text);
 		if (grammar->sub_readings_ltr && reading->next) {
 			reading = reverse(reading);
@@ -640,13 +640,9 @@ void ApertiumApplicator::testPR(std::ostream& output) {
 	}
 }
 
-void ApertiumApplicator::printReading(Reading* reading, std::ostream& output) {
-	if (reading->noprint) {
-		return;
-	}
-
+void ApertiumApplicator::printReading(Reading* reading, std::ostream& output, ApertiumCasing casing, int firstlower) {
 	if (reading->next) {
-		printReading(reading->next, output);
+		printReading(reading->next, output, casing, firstlower);
 		u_fputc('+', output);
 	}
 
@@ -654,33 +650,15 @@ void ApertiumApplicator::printReading(Reading* reading, std::ostream& output) {
 		// Lop off the initial and final '"' characters
 		UnicodeString bf(single_tags[reading->baseform]->tag.c_str() + 1, static_cast<int32_t>(single_tags[reading->baseform]->tag.size() - 2));
 
-		if (wordform_case && !reading->next) {
-			// Use surface/wordform case, eg. if lt-proc
-			// was called with "-w" option (which puts
-			// dictionary case on lemma/basefrom)
-			// Lop off the initial and final '"<>"' characters
-			// ToDo: A copy does not need to be made here - use pointer offsets
-			UnicodeString wf(reading->parent->wordform->tag.c_str() + 2, static_cast<int32_t>(reading->parent->wordform->tag.size() - 4));
-
-			int first = 0; // first occurrence of a lowercase character in baseform
-			for (; first < bf.length(); ++first) {
-				if (u_islower(bf[first]) != 0) {
-					break;
-				}
-			}
-
-			// this corresponds to fst_processor.cc in lttoolbox:
-			bool firstupper = first < wf.length() && (u_isupper(wf[first]) != 0);
-			bool uppercase = firstupper && u_isupper(wf[wf.length() - 1]);
-
-			if (uppercase) {
+		if (wordform_case) {
+			if (casing == ApertiumCasing::Upper) {
 				bf.toUpper(); // Perform a Unicode case folding to upper case -- Tino Didriksen
 			}
-			else if (firstupper && first < bf.length()) {
+			else if (casing == ApertiumCasing::Title && !reading->next) {
 				// static_cast<UChar>(u_toupper(bf[first])) gives strange output
-				UnicodeString range(bf, first, 1);
+				UnicodeString range(bf, firstlower, 1);
 				range.toUpper();
-				bf.setCharAt(first, range[0]);
+				bf.setCharAt(firstlower, range[0]);
 			}
 		} // if (wordform_case)
 
@@ -754,6 +732,68 @@ void ApertiumApplicator::printReading(Reading* reading, std::ostream& output) {
 	}
 }
 
+void ApertiumApplicator::printReading(Reading* reading, std::ostream& output) {
+	if (reading->noprint) {
+		return;
+	}
+
+	size_t firstlower = 0;
+	ApertiumCasing casing = ApertiumCasing::Lower;
+
+	if (wordform_case) {
+		// Use surface/wordform case, eg. if lt-proc
+		// was called with "-w" option (which puts
+		// dictionary case on lemma/basefrom)
+		// cf. fst_processor.cc in lttoolbox
+		Reading* last = reading;
+		while (last->next && last->next->baseform) {
+			last = last->next;
+		}
+		if (last->baseform) {
+			// Including the initial and final '"' characters
+			UString* bftag = &single_tags[last->baseform]->tag;
+			// Excluding the initial and final '"' characters
+			size_t bf_length = bftag->size() - 2;
+			UString* wftag = &reading->parent->wordform->tag;
+			size_t wf_length = wftag->size() - 4;
+
+			for (; firstlower < bf_length; ++firstlower) {
+				if (u_islower(bftag->at(firstlower+1)) != 0) {
+					break;
+				}
+			}
+
+			int uppercaseseen = 0;
+			bool allupper = true;
+			// 2-2: Skip the initial and final '"<>"' characters
+			for (size_t i = 2; i < wftag->size() - 2; ++i) {
+				UChar32 c = wftag->at(i);
+				if(u_isUAlphabetic(c)) {
+					if(!u_isUUppercase(c)) {
+						allupper = false;
+						break;
+					}
+					else {
+						uppercaseseen++;
+					}
+				}
+			}
+
+			// Require at least 2 characters to call it UPPER:
+			if (allupper && uppercaseseen >= 2) {
+				casing = ApertiumCasing::Upper;
+			}
+			else if (firstlower < wf_length
+				 && firstlower < bf_length
+				 && (u_isupper(wftag->at(firstlower+2)) != 0)) {
+				casing = ApertiumCasing::Title;
+			}
+		}
+	} // if (wordform_case)
+	printReading(reading, output, casing, firstlower);
+}
+
+
 void ApertiumApplicator::printSingleWindow(SingleWindow* window, std::ostream& output) {
 	// Window text comes at the left
 	if (!window->text.empty()) {
@@ -802,6 +842,7 @@ void ApertiumApplicator::printSingleWindow(SingleWindow* window, std::ostream& o
 		bool need_slash = print_word_forms;
 
 		//Tag::printTagRaw(output, single_tags[cohort->wordform]);
+		std::sort(cohort->readings.begin(), cohort->readings.end(), CG3::Reading::cmp_number);
 		for (auto reading : cohort->readings) {
 			if (need_slash) {
 				u_fprintf(output, "/");
@@ -817,6 +858,7 @@ void ApertiumApplicator::printSingleWindow(SingleWindow* window, std::ostream& o
 		}
 
 		if (trace) {
+			std::sort(cohort->delayed.begin(), cohort->delayed.end(), CG3::Reading::cmp_number);
 			for (auto reading : cohort->delayed) {
 				if (need_slash) {
 					u_fprintf(output, "/%C", not_sign);
@@ -827,6 +869,7 @@ void ApertiumApplicator::printSingleWindow(SingleWindow* window, std::ostream& o
 				}
 				printReading(reading, output);
 			}
+			std::sort(cohort->deleted.begin(), cohort->deleted.end(), CG3::Reading::cmp_number);
 			for (auto reading : cohort->deleted) {
 				if (need_slash) {
 					u_fprintf(output, "/%C", not_sign);

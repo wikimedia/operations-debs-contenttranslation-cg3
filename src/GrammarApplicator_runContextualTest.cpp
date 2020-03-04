@@ -47,7 +47,7 @@ Cohort* GrammarApplicator::runSingleTest(Cohort* cohort, const ContextualTest* t
 			}
 
 			for (auto list : lists) {
-				if (list == 0) {
+				if (list == nullptr) {
 					continue;
 				}
 				for (auto reading : *list) {
@@ -89,18 +89,18 @@ Cohort* GrammarApplicator::runSingleTest(Cohort* cohort, const ContextualTest* t
 	if (context.matched_target && (test->pos & POS_SCANFIRST)) {
 		rvs |= TRV_BREAK;
 	}
-	else if (!(test->pos & (POS_SCANALL | POS_SCANFIRST))) {
+	else if (!(test->pos & (POS_SCANALL | POS_SCANFIRST | POS_DEP_DEEP | POS_DEP_GLOB))) {
 		rvs |= TRV_BREAK | TRV_BREAK_DEFAULT;
 	}
 
 	bool broken = (rvs & TRV_BREAK) != 0;
 
-	context.test = 0;
-	context.deep = 0;
-	context.origin = 0;
+	context.test = nullptr;
+	context.deep = nullptr;
+	context.origin = nullptr;
 	context.did_test = true;
 	if (test->barrier) {
-		dSMC_Context context = { 0, 0, 0, test->pos & ~POS_CAREFUL, false, false, false, true };
+		dSMC_Context context = { nullptr, nullptr, nullptr, test->pos & ~POS_CAREFUL, false, false, false, true };
 		bool barrier = doesSetMatchCohortNormal(*cohort, test->barrier, &context);
 		if (barrier) {
 			seen_barrier = true;
@@ -109,7 +109,7 @@ Cohort* GrammarApplicator::runSingleTest(Cohort* cohort, const ContextualTest* t
 		}
 	}
 	if (test->cbarrier) {
-		dSMC_Context context = { 0, 0, 0, test->pos | POS_CAREFUL, false, false, false, true };
+		dSMC_Context context = { nullptr, nullptr, nullptr, test->pos | POS_CAREFUL, false, false, false, true };
 		bool cbarrier = doesSetMatchCohortCareful(*cohort, test->cbarrier, &context);
 		if (cbarrier) {
 			seen_barrier = true;
@@ -140,9 +140,20 @@ Cohort* GrammarApplicator::runSingleTest(SingleWindow* sWindow, size_t i, const 
 }
 
 Cohort* getCohortInWindow(SingleWindow*& sWindow, size_t position, const ContextualTest* test, int32_t& pos) {
-	Cohort* cohort = 0;
+	Cohort* cohort = nullptr;
 	pos = static_cast<int32_t>(position) + test->offset;
 	// ToDo: (NOT*) and (*C) tests can be cached
+	if ((test->pos & POS_ABSOLUTE) && (test->pos & (POS_SPAN_LEFT|POS_SPAN_RIGHT))) {
+		if (sWindow->previous && (test->pos & POS_SPAN_LEFT)) {
+			sWindow = sWindow->previous;
+		}
+		else if (sWindow->next && (test->pos & POS_SPAN_RIGHT)) {
+			sWindow = sWindow->next;
+		}
+		else {
+			return cohort;
+		}
+	}
 	if (test->pos & POS_ABSOLUTE) {
 		if (test->offset < 0) {
 			pos = static_cast<int32_t>(sWindow->cohorts.size()) + test->offset;
@@ -249,7 +260,7 @@ Cohort* GrammarApplicator::runContextualTest_tmpl(SingleWindow* sWindow, size_t 
 		tmpl->cbarrier = orgcbar;
 		tmpl->barrier = orgbar;
 		if (cohort && cdeep && test->offset != 0 && !posOutputHelper(sWindow, position, test, cohort, cdeep)) {
-			cohort = 0;
+			cohort = nullptr;
 		}
 	}
 
@@ -271,7 +282,7 @@ Cohort* GrammarApplicator::runContextualTest(SingleWindow* sWindow, size_t posit
 		CG3Quit(1);
 	}
 
-	Cohort* cohort = 0;
+	Cohort* cohort = nullptr;
 	bool retval = true;
 
 	ticks tstamp(gtimer);
@@ -286,14 +297,14 @@ Cohort* GrammarApplicator::runContextualTest(SingleWindow* sWindow, size_t posit
 	int32_t pos = 0;
 
 	if (test->tmpl) {
-		Cohort* cdeep = 0;
+		Cohort* cdeep = nullptr;
 		cohort = runContextualTest_tmpl(sWindow, position, test, test->tmpl, cdeep, origin);
 		if (deep) {
 			*deep = cdeep;
 		}
 	}
 	else if (!test->ors.empty()) {
-		Cohort* cdeep = 0;
+		Cohort* cdeep = nullptr;
 		for (auto iter : test->ors) {
 			dep_deep_seen.clear();
 			cohort = runContextualTest_tmpl(sWindow, position, test, iter, cdeep, origin);
@@ -341,7 +352,7 @@ Cohort* GrammarApplicator::runContextualTest(SingleWindow* sWindow, size_t posit
 			}
 		}
 
-		CohortIterator* it = 0;
+		CohortIterator* it = nullptr;
 		if ((test->pos & POS_DEP_PARENT) && (test->pos & POS_DEP_GLOB)) {
 			it = &depAncestorIters[ci_depths[5]++];
 		}
@@ -398,14 +409,14 @@ Cohort* GrammarApplicator::runContextualTest(SingleWindow* sWindow, size_t posit
 						left = left->previous;
 					}
 					else {
-						left = 0;
+						left = nullptr;
 					}
 					if (right && (test->pos & (POS_SPAN_BOTH | POS_SPAN_RIGHT))) {
 						match = doesSetMatchReading(right->bag_of_tags, test->target, true);
 						right = right->next;
 					}
 					else {
-						right = 0;
+						right = nullptr;
 					}
 					if (match) {
 						break;
@@ -452,7 +463,7 @@ Cohort* GrammarApplicator::runContextualTest(SingleWindow* sWindow, size_t posit
 					else if (rvs & TRV_BREAK) {
 						left = 0;
 						if (test->pos & POS_NOT) {
-							right = 0;
+							right = nullptr;
 						}
 					}
 					else if (lpos - i == 0) {
@@ -463,7 +474,7 @@ Cohort* GrammarApplicator::runContextualTest(SingleWindow* sWindow, size_t posit
 							}
 						}
 						else {
-							left = 0;
+							left = nullptr;
 						}
 					}
 				}
@@ -476,7 +487,7 @@ Cohort* GrammarApplicator::runContextualTest(SingleWindow* sWindow, size_t posit
 					else if (rvs & TRV_BREAK) {
 						right = 0;
 						if (test->pos & POS_NOT) {
-							left = 0;
+							left = nullptr;
 						}
 					}
 					else if (rpos + i == right->cohorts.size() - 1) {
@@ -485,7 +496,7 @@ Cohort* GrammarApplicator::runContextualTest(SingleWindow* sWindow, size_t posit
 							rpos = (0 - i) - 1;
 						}
 						else {
-							right = 0;
+							right = nullptr;
 						}
 					}
 				}
@@ -503,7 +514,7 @@ Cohort* GrammarApplicator::runContextualTest(SingleWindow* sWindow, size_t posit
 
 		if (it) {
 			it->reset(cohort, test, always_span);
-			Cohort* nc = 0;
+			Cohort* nc = nullptr;
 			uint8_t rvs = 0;
 			size_t seen = 0;
 			if ((test->pos & POS_SELF) && (!(test->pos & MASK_POS_LORR) || ((test->pos & POS_DEP_PARENT) && !(test->pos & POS_DEP_GLOB)))) {
@@ -520,22 +531,22 @@ Cohort* GrammarApplicator::runContextualTest(SingleWindow* sWindow, size_t posit
 				for (; *it != CohortIterator(0); ++(*it)) {
 					++seen;
 					if ((test->pos & POS_LEFT) && less_Cohort(current, **it)) {
-						nc = 0;
+						nc = nullptr;
 						retval = false;
 						break;
 					}
 					if ((test->pos & POS_RIGHT) && !less_Cohort(current, **it)) {
-						nc = 0;
+						nc = nullptr;
 						retval = false;
 						break;
 					}
 					nc = runSingleTest(**it, test, rvs, &retval, deep, origin);
 					if (test->pos & POS_ALL && !retval) {
-						nc = 0;
+						nc = nullptr;
 						break;
 					}
 					if (test->pos & POS_NONE && retval) {
-						nc = 0;
+						nc = nullptr;
 						break;
 					}
 					if (rvs & TRV_BREAK) {
@@ -578,7 +589,7 @@ label_gotACohort:
 	}
 
 	if (!retval) {
-		cohort = 0;
+		cohort = nullptr;
 	}
 	else if (!cohort) {
 		cohort = sWindow->cohorts[0];
@@ -588,7 +599,7 @@ label_gotACohort:
 }
 
 Cohort* GrammarApplicator::runDependencyTest(SingleWindow* sWindow, Cohort* current, const ContextualTest* test, Cohort** deep, Cohort* origin, const Cohort* self) {
-	Cohort* rv = 0;
+	Cohort* rv = nullptr;
 
 	if (self) {
 		if (self == current) {
@@ -621,7 +632,7 @@ Cohort* GrammarApplicator::runDependencyTest(SingleWindow* sWindow, Cohort* curr
 
 	// Recursion may happen, so can't be static
 	uint32SortedVector tmp_deps;
-	uint32SortedVector* deps = 0;
+	uint32SortedVector* deps = nullptr;
 	if (test->pos & POS_DEP_CHILD) {
 		deps = &current->dep_children;
 	}
@@ -712,7 +723,7 @@ Cohort* GrammarApplicator::runDependencyTest(SingleWindow* sWindow, Cohort* curr
 		}
 		if (test->pos & POS_ALL) {
 			if (!retval) {
-				rv = 0;
+				rv = nullptr;
 				break;
 			}
 			else {
@@ -742,11 +753,11 @@ Cohort* GrammarApplicator::runParenthesisTest(SingleWindow* sWindow, const Cohor
 	if (current->local_number < par_left_pos || current->local_number > par_right_pos) {
 		return 0;
 	}
-	Cohort* rv = 0;
+	Cohort* rv = nullptr;
 
 	bool retval = false;
 	uint8_t rvs = 0;
-	Cohort* cohort = 0;
+	Cohort* cohort = nullptr;
 	if (test->pos & POS_LEFT_PAR) {
 		cohort = sWindow->cohorts[par_left_pos];
 	}
@@ -792,12 +803,12 @@ Cohort* GrammarApplicator::runRelationTest(SingleWindow* sWindow, Cohort* curren
 	}
 
 	if (test->pos & POS_LEFT) {
-		static CohortSet tmp;
+		static thread_local CohortSet tmp;
 		tmp.assign(rels.begin(), rels.lower_bound(current));
 		rels.swap(tmp);
 	}
 	if (test->pos & POS_RIGHT) {
-		static CohortSet tmp;
+		static thread_local CohortSet tmp;
 		tmp.assign(rels.lower_bound(current), rels.end());
 		rels.swap(tmp);
 	}
@@ -815,7 +826,7 @@ Cohort* GrammarApplicator::runRelationTest(SingleWindow* sWindow, Cohort* curren
 		rels.insert(c);
 	}
 
-	Cohort* rv = 0;
+	Cohort* rv = nullptr;
 	for (auto iter : rels) {
 		uint8_t rvs = 0;
 		bool retval = false;
@@ -823,7 +834,7 @@ Cohort* GrammarApplicator::runRelationTest(SingleWindow* sWindow, Cohort* curren
 		runSingleTest(iter, test, rvs, &retval, deep, origin);
 		if (test->pos & POS_ALL) {
 			if (!retval) {
-				rv = 0;
+				rv = nullptr;
 				break;
 			}
 			else {

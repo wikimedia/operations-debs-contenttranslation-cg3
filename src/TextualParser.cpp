@@ -31,7 +31,7 @@ namespace CG3 {
 
 TextualParser::TextualParser(Grammar& res, std::ostream& ux_err, bool _dump_ast)
   : IGrammarParser(res, ux_err)
-  , filebase(0)
+  , filebase(nullptr)
   , verbosity_level(0)
   , sets_counter(100)
   , seen_mapping_prefix(0)
@@ -45,7 +45,7 @@ TextualParser::TextualParser(Grammar& res, std::ostream& ux_err, bool _dump_ast)
   , strict_wforms(false)
   , strict_bforms(false)
   , strict_second(false)
-  , filename(0)
+  , filename(nullptr)
   , error_counter(0)
 {
 	dump_ast = _dump_ast;
@@ -130,7 +130,7 @@ Tag* TextualParser::parseTag(const UChar* to, const UChar* p) {
 		if (tag->type & (T_ANY | T_VARSTRING | T_VSTR | T_META | T_VARIABLE | T_SET | T_PAR_LEFT | T_PAR_RIGHT | T_ENCL | T_TARGET | T_MARK | T_ATTACHTO | T_SAME_BASIC)) {
 			// Always allow...
 		}
-		else if (u_strcmp(tag->tag.c_str(), stringbits[S_BEGINTAG].getTerminatedBuffer()) == 0 || u_strcmp(tag->tag.c_str(), stringbits[S_ENDTAG].getTerminatedBuffer()) == 0) {
+		else if (tag->tag == stringbits[S_BEGINTAG] || tag->tag == stringbits[S_ENDTAG]) {
 			// Always allow >>> and <<<
 		}
 		else if (tag->type & (T_REGEXP | T_REGEXP_ANY)) {
@@ -163,6 +163,10 @@ Tag* TextualParser::parseTag(const UChar* to, const UChar* p) {
 		}
 	}
 	return tag;
+}
+
+Tag* TextualParser::parseTag(const UString& to, const UChar* p) {
+	return parseTag(to.c_str(), p);
 }
 
 Tag* TextualParser::addTag(Tag* tag) {
@@ -764,37 +768,37 @@ void TextualParser::parseContextualTestPosition(UChar*& p, ContextualTest& t) {
 	}
 }
 
-ContextualTest* TextualParser::parseContextualTestList(UChar*& p, Rule* rule) {
+ContextualTest* TextualParser::parseContextualTestList(UChar*& p, Rule* rule, bool in_tmpl) {
 	AST_OPEN(Context);
 	ContextualTest* t = result->allocateContextualTest();
 	ContextualTest* ot = t;
 	t->line = result->lines;
 
 	result->lines += SKIPWS(p);
-	if (ux_simplecasecmp(p, stringbits[S_TEXTNEGATE].getTerminatedBuffer(), stringbits[S_TEXTNEGATE].length())) {
+	if (ux_simplecasecmp(p, stringbits[S_TEXTNEGATE])) {
 		AST_OPEN(ContextMod);
-		p += stringbits[S_TEXTNEGATE].length();
+		p += stringbits[S_TEXTNEGATE].size();
 		AST_CLOSE(p);
 		t->pos |= POS_NEGATE;
 	}
 	result->lines += SKIPWS(p);
-	if (ux_simplecasecmp(p, stringbits[S_ALL].getTerminatedBuffer(), stringbits[S_ALL].length())) {
+	if (ux_simplecasecmp(p, stringbits[S_ALL])) {
 		AST_OPEN(ContextMod);
-		p += stringbits[S_ALL].length();
+		p += stringbits[S_ALL].size();
 		AST_CLOSE(p);
 		t->pos |= POS_ALL;
 	}
 	result->lines += SKIPWS(p);
-	if (ux_simplecasecmp(p, stringbits[S_NONE].getTerminatedBuffer(), stringbits[S_NONE].length())) {
+	if (ux_simplecasecmp(p, stringbits[S_NONE])) {
 		AST_OPEN(ContextMod);
-		p += stringbits[S_NONE].length();
+		p += stringbits[S_NONE].size();
 		AST_CLOSE(p);
 		t->pos |= POS_NONE;
 	}
 	result->lines += SKIPWS(p);
-	if (ux_simplecasecmp(p, stringbits[S_TEXTNOT].getTerminatedBuffer(), stringbits[S_TEXTNOT].length())) {
+	if (ux_simplecasecmp(p, stringbits[S_TEXTNOT])) {
 		AST_OPEN(ContextMod);
-		p += stringbits[S_TEXTNOT].length();
+		p += stringbits[S_TEXTNOT].size();
 		AST_CLOSE(p);
 		t->pos |= POS_NOT;
 	}
@@ -820,12 +824,12 @@ ContextualTest* TextualParser::parseContextualTestList(UChar*& p, Rule* rule) {
 				error("%s: Error: Expected '(' but found '%C' on line %u near `%S`!\n", *p, p);
 			}
 			++p;
-			ContextualTest* ored = parseContextualTestList(p, rule);
+			ContextualTest* ored = parseContextualTestList(p, rule, true);
 			++p;
 			t->ors.push_back(ored);
 			result->lines += SKIPWS(p);
-			if (ux_simplecasecmp(p, stringbits[S_OR].getTerminatedBuffer(), stringbits[S_OR].length())) {
-				p += stringbits[S_OR].length();
+			if (ux_simplecasecmp(p, stringbits[S_OR])) {
+				p += stringbits[S_OR].size();
 			}
 			else {
 				break;
@@ -907,18 +911,18 @@ ContextualTest* TextualParser::parseContextualTestList(UChar*& p, Rule* rule) {
 		}
 
 		result->lines += SKIPWS(p);
-		if (ux_simplecasecmp(p, stringbits[S_CBARRIER].getTerminatedBuffer(), stringbits[S_CBARRIER].length())) {
+		if (ux_simplecasecmp(p, stringbits[S_CBARRIER])) {
 			AST_OPEN(BarrierSafe);
-			p += stringbits[S_CBARRIER].length();
+			p += stringbits[S_CBARRIER].size();
 			result->lines += SKIPWS(p);
 			Set* s = parseSetInlineWrapper(p);
 			t->cbarrier = s->hash;
 			AST_CLOSE(p);
 		}
 		result->lines += SKIPWS(p);
-		if (ux_simplecasecmp(p, stringbits[S_BARRIER].getTerminatedBuffer(), stringbits[S_BARRIER].length())) {
+		if (ux_simplecasecmp(p, stringbits[S_BARRIER])) {
 			AST_OPEN(Barrier);
-			p += stringbits[S_BARRIER].length();
+			p += stringbits[S_BARRIER].size();
 			result->lines += SKIPWS(p);
 			Set* s = parseSetInlineWrapper(p);
 			t->barrier = s->hash;
@@ -937,21 +941,27 @@ ContextualTest* TextualParser::parseContextualTestList(UChar*& p, Rule* rule) {
 
 	bool linked = false;
 	result->lines += SKIPWS(p);
-	if (ux_simplecasecmp(p, stringbits[S_AND].getTerminatedBuffer(), stringbits[S_AND].length())) {
+	if (ux_simplecasecmp(p, stringbits[S_AND])) {
 		error("%s: Error: 'AND' is deprecated; use 'LINK 0' or operator '+' instead. Found on line %u near `%S`!\n", p);
 	}
-	if (ux_simplecasecmp(p, stringbits[S_LINK].getTerminatedBuffer(), stringbits[S_LINK].length())) {
-		p += stringbits[S_LINK].length();
+	if (ux_simplecasecmp(p, stringbits[S_LINK])) {
+		p += stringbits[S_LINK].size();
 		linked = true;
 	}
 	result->lines += SKIPWS(p);
 
 	if (linked) {
-		if (t->pos & POS_NONE) {
+		t->linked = parseContextualTestList(p, rule, in_tmpl);
+		if ((t->pos & POS_NONE) && !(t->linked->pos & POS_MARK_JUMP)) {
 			error("%s: Error: It does not make sense to LINK from a NONE test; perhaps you meant NOT or NEGATE on line %u near `%S`?\n", p);
 		}
-		t->linked = parseContextualTestList(p, rule);
 	}
+	else if (!in_tmpl && (t->pos & POS_SCANALL) && !(t->pos & POS_CAREFUL)) {
+		uncond_swap<UChar> swp(*p, 0);
+		u_fprintf(ux_stderr, "%s: Warning: ** without LINK or C doesn't make sense on line %u near %S.\n", filebase, result->lines, pos_p);
+		u_fflush(ux_stderr);
+	}
+
 	AST_CLOSE(p);
 
 	if (rule) {
@@ -1020,7 +1030,7 @@ void TextualParser::parseRule(UChar*& p, KEYWORDS key) {
 	}
 
 	AST_OPEN(RuleType);
-	p += keywords[key].length();
+	p += keywords[key].size();
 	AST_CLOSE(p);
 	result->lines += SKIPWS(p);
 
@@ -1047,12 +1057,12 @@ void TextualParser::parseRule(UChar*& p, KEYWORDS key) {
 
 	if (key == K_EXTERNAL) {
 		AST_OPEN(RuleExternalType);
-		if (ux_simplecasecmp(p, stringbits[S_ONCE].getTerminatedBuffer(), stringbits[S_ONCE].length())) {
-			p += stringbits[S_ONCE].length();
+		if (ux_simplecasecmp(p, stringbits[S_ONCE])) {
+			p += stringbits[S_ONCE].size();
 			rule->type = K_EXTERNAL_ONCE;
 		}
-		else if (ux_simplecasecmp(p, stringbits[S_ALWAYS].getTerminatedBuffer(), stringbits[S_ALWAYS].length())) {
-			p += stringbits[S_ALWAYS].length();
+		else if (ux_simplecasecmp(p, stringbits[S_ALWAYS])) {
+			p += stringbits[S_ALWAYS].size();
 			rule->type = K_EXTERNAL_ALWAYS;
 		}
 		else {
@@ -1094,8 +1104,8 @@ void TextualParser::parseRule(UChar*& p, KEYWORDS key) {
 		setflag = false;
 		for (uint32_t i = 0; i < FLAGS_COUNT; i++) {
 			UChar* op = p;
-			if (ux_simplecasecmp(p, g_flags[i].getTerminatedBuffer(), g_flags[i].length())) {
-				p += g_flags[i].length();
+			if (ux_simplecasecmp(p, g_flags[i])) {
+				p += g_flags[i].size();
 				rule->flags |= (1 << i);
 				setflag = true;
 
@@ -1221,6 +1231,12 @@ void TextualParser::parseRule(UChar*& p, KEYWORDS key) {
 			}
 			return is_list;
 		}
+		for (auto op : s->set_ops) {
+			if (op != S_OR) {
+				is_list = false;
+				break;
+			}
+		}
 		for (auto i : s->sets) {
 			auto set = result->getSet(i);
 			if (set->trie.empty() && set->trie_special.empty() && !(set->type & (ST_TAG_UNIFY | ST_SET_UNIFY | ST_CHILD_UNIFY))) {
@@ -1247,6 +1263,10 @@ void TextualParser::parseRule(UChar*& p, KEYWORDS key) {
 		AST_CLOSE(p);
 	}
 
+	if (rule->sub_reading == GSR_ANY && (key == K_MAP || key == K_ADD || key == K_REPLACE || key == K_SUBSTITUTE || key == K_COPY)) {
+		error("%s: Error: SUB:* on line %u is not yet valid for MAP/ADD/REPLACE/SUBSTITUTE/COPY!\n");
+	}
+
 	result->lines += SKIPWS(p);
 	lp = p;
 	if (key == K_MAP || key == K_ADD || key == K_REPLACE || key == K_APPEND || key == K_SUBSTITUTE || key == K_COPY || key == K_ADDRELATIONS || key == K_ADDRELATION || key == K_SETRELATIONS || key == K_SETRELATION || key == K_REMRELATIONS || key == K_REMRELATION || key == K_SETVARIABLE || key == K_REMVARIABLE || key == K_ADDCOHORT || key == K_JUMP || key == K_SPLITCOHORT || key == K_MERGECOHORTS) {
@@ -1265,9 +1285,9 @@ void TextualParser::parseRule(UChar*& p, KEYWORDS key) {
 	}
 
 	bool copy_except = false;
-	if (key == K_COPY && ux_simplecasecmp(p, stringbits[S_EXCEPT].getTerminatedBuffer(), stringbits[S_EXCEPT].length())) {
+	if (key == K_COPY && ux_simplecasecmp(p, stringbits[S_EXCEPT])) {
 		AST_OPEN(RuleExcept);
-		p += stringbits[S_EXCEPT].length();
+		p += stringbits[S_EXCEPT].size();
 		copy_except = true;
 		AST_CLOSE(p);
 	}
@@ -1291,12 +1311,12 @@ void TextualParser::parseRule(UChar*& p, KEYWORDS key) {
 
 	if (key == K_ADDCOHORT) {
 		AST_OPEN(RuleAddcohortWhere);
-		if (ux_simplecasecmp(p, stringbits[S_AFTER].getTerminatedBuffer(), stringbits[S_AFTER].length())) {
-			p += stringbits[S_AFTER].length();
+		if (ux_simplecasecmp(p, stringbits[S_AFTER])) {
+			p += stringbits[S_AFTER].size();
 			rule->type = K_ADDCOHORT_AFTER;
 		}
-		else if (ux_simplecasecmp(p, stringbits[S_BEFORE].getTerminatedBuffer(), stringbits[S_BEFORE].length())) {
-			p += stringbits[S_BEFORE].length();
+		else if (ux_simplecasecmp(p, stringbits[S_BEFORE])) {
+			p += stringbits[S_BEFORE].size();
 			rule->type = K_ADDCOHORT_BEFORE;
 		}
 		else {
@@ -1306,12 +1326,12 @@ void TextualParser::parseRule(UChar*& p, KEYWORDS key) {
 	}
 
 	if (key == K_ADD || key == K_MAP || key == K_SUBSTITUTE || key == K_COPY) {
-		if (ux_simplecasecmp(p, stringbits[S_AFTER].getTerminatedBuffer(), stringbits[S_AFTER].length())) {
-			p += stringbits[S_AFTER].length();
+		if (ux_simplecasecmp(p, stringbits[S_AFTER])) {
+			p += stringbits[S_AFTER].size();
 			rule->flags |= RF_AFTER;
 		}
-		else if (ux_simplecasecmp(p, stringbits[S_BEFORE].getTerminatedBuffer(), stringbits[S_BEFORE].length())) {
-			p += stringbits[S_BEFORE].length();
+		else if (ux_simplecasecmp(p, stringbits[S_BEFORE])) {
+			p += stringbits[S_BEFORE].size();
 			rule->flags |= RF_BEFORE;
 		}
 		if (rule->flags & (RF_BEFORE | RF_AFTER)) {
@@ -1321,14 +1341,14 @@ void TextualParser::parseRule(UChar*& p, KEYWORDS key) {
 	}
 
 	result->lines += SKIPWS(p);
-	if (ux_simplecasecmp(p, stringbits[S_TARGET].getTerminatedBuffer(), stringbits[S_TARGET].length())) {
-		p += stringbits[S_TARGET].length();
+	if (ux_simplecasecmp(p, stringbits[S_TARGET])) {
+		p += stringbits[S_TARGET].size();
 	}
 	result->lines += SKIPWS(p);
 
-	if (ux_simplecasecmp(p, g_flags[FL_WITHCHILD].getTerminatedBuffer(), g_flags[FL_WITHCHILD].length())) {
+	if (ux_simplecasecmp(p, g_flags[FL_WITHCHILD])) {
 		AST_OPEN(RuleFlag);
-		p += g_flags[FL_WITHCHILD].length();
+		p += g_flags[FL_WITHCHILD].size();
 		AST_CLOSE(p);
 		AST_OPEN(RuleWithChildTarget);
 		Set* s = parseSetInlineWrapper(p);
@@ -1339,9 +1359,9 @@ void TextualParser::parseRule(UChar*& p, KEYWORDS key) {
 		rule->childset1 = s->hash;
 		result->lines += SKIPWS(p);
 	}
-	else if (ux_simplecasecmp(p, g_flags[FL_NOCHILD].getTerminatedBuffer(), g_flags[FL_NOCHILD].length())) {
+	else if (ux_simplecasecmp(p, g_flags[FL_NOCHILD])) {
 		AST_OPEN(RuleFlag);
-		p += g_flags[FL_NOCHILD].length();
+		p += g_flags[FL_NOCHILD].size();
 		AST_CLOSE(p);
 		rule->flags |= RF_NOCHILD;
 		rule->flags &= ~RF_WITHCHILD;
@@ -1355,8 +1375,8 @@ void TextualParser::parseRule(UChar*& p, KEYWORDS key) {
 	AST_CLOSE(p);
 
 	result->lines += SKIPWS(p);
-	if (ux_simplecasecmp(p, stringbits[S_IF].getTerminatedBuffer(), stringbits[S_IF].length())) {
-		p += stringbits[S_IF].length();
+	if (ux_simplecasecmp(p, stringbits[S_IF])) {
+		p += stringbits[S_IF].size();
 	}
 	result->lines += SKIPWS(p);
 
@@ -1378,12 +1398,12 @@ void TextualParser::parseRule(UChar*& p, KEYWORDS key) {
 		result->lines += SKIPWS(p);
 		if (key == K_MOVE) {
 			AST_OPEN(RuleMoveType);
-			if (ux_simplecasecmp(p, stringbits[S_AFTER].getTerminatedBuffer(), stringbits[S_AFTER].length())) {
-				p += stringbits[S_AFTER].length();
+			if (ux_simplecasecmp(p, stringbits[S_AFTER])) {
+				p += stringbits[S_AFTER].size();
 				rule->type = K_MOVE_AFTER;
 			}
-			else if (ux_simplecasecmp(p, stringbits[S_BEFORE].getTerminatedBuffer(), stringbits[S_BEFORE].length())) {
-				p += stringbits[S_BEFORE].length();
+			else if (ux_simplecasecmp(p, stringbits[S_BEFORE])) {
+				p += stringbits[S_BEFORE].size();
 				rule->type = K_MOVE_BEFORE;
 			}
 			else {
@@ -1392,8 +1412,8 @@ void TextualParser::parseRule(UChar*& p, KEYWORDS key) {
 			AST_CLOSE(p);
 		}
 		else if (key == K_SWITCH || key == K_MERGECOHORTS) {
-			if (ux_simplecasecmp(p, stringbits[S_WITH].getTerminatedBuffer(), stringbits[S_WITH].length())) {
-				p += stringbits[S_WITH].length();
+			if (ux_simplecasecmp(p, stringbits[S_WITH])) {
+				p += stringbits[S_WITH].size();
 			}
 			else {
 				error("%s: Error: Expected movement/merge keyword WITH on line %u near `%S`!\n", p);
@@ -1401,11 +1421,11 @@ void TextualParser::parseRule(UChar*& p, KEYWORDS key) {
 		}
 		else {
 			AST_OPEN(RuleDirection);
-			if (ux_simplecasecmp(p, stringbits[S_TO].getTerminatedBuffer(), stringbits[S_TO].length())) {
-				p += stringbits[S_TO].length();
+			if (ux_simplecasecmp(p, stringbits[S_TO])) {
+				p += stringbits[S_TO].size();
 			}
-			else if (ux_simplecasecmp(p, stringbits[S_FROM].getTerminatedBuffer(), stringbits[S_FROM].length())) {
-				p += stringbits[S_FROM].length();
+			else if (ux_simplecasecmp(p, stringbits[S_FROM])) {
+				p += stringbits[S_FROM].size();
 				rule->flags |= RF_REVERSE;
 			}
 			else {
@@ -1417,15 +1437,15 @@ void TextualParser::parseRule(UChar*& p, KEYWORDS key) {
 
 		if (key == K_MOVE) {
 			AST_OPEN(RuleWithChildDepTarget);
-			if (ux_simplecasecmp(p, g_flags[FL_WITHCHILD].getTerminatedBuffer(), g_flags[FL_WITHCHILD].length())) {
-				p += g_flags[FL_WITHCHILD].length();
+			if (ux_simplecasecmp(p, g_flags[FL_WITHCHILD])) {
+				p += g_flags[FL_WITHCHILD].size();
 				result->has_dep = true;
 				Set* s = parseSetInlineWrapper(p);
 				rule->childset2 = s->hash;
 				result->lines += SKIPWS(p);
 			}
-			else if (ux_simplecasecmp(p, g_flags[FL_NOCHILD].getTerminatedBuffer(), g_flags[FL_NOCHILD].length())) {
-				p += g_flags[FL_NOCHILD].length();
+			else if (ux_simplecasecmp(p, g_flags[FL_NOCHILD])) {
+				p += g_flags[FL_NOCHILD].size();
 				rule->childset2 = 0;
 				result->lines += SKIPWS(p);
 			}
@@ -1487,7 +1507,12 @@ void TextualParser::parseRule(UChar*& p, KEYWORDS key) {
 	}
 
 	rule->reverseContextualTests();
-	addRuleToGrammar(rule);
+	if (only_sets) {
+		result->destroyRule(rule);
+	}
+	else {
+		addRuleToGrammar(rule);
+	}
 
 	result->lines += SKIPWS(p, ';');
 	if (*p != ';') {
@@ -1504,7 +1529,9 @@ void TextualParser::parseAnchorish(UChar*& p) {
 	auto c = static_cast<int32_t>(n - p);
 	u_strncpy(&gbuffers[0][0], p, c);
 	gbuffers[0][c] = 0;
-	result->addAnchor(&gbuffers[0][0], static_cast<uint32_t>(result->rule_by_number.size()), true);
+	if (!only_sets) {
+		result->addAnchor(&gbuffers[0][0], static_cast<uint32_t>(result->rule_by_number.size()), true);
+	}
 	p = n;
 	AST_CLOSE(p);
 	result->lines += SKIPWS(p, ';');
@@ -1537,7 +1564,7 @@ void TextualParser::parseFromUChar(UChar* input, const char* fname) {
 				}
 				result->delimiters = result->allocateSet();
 				result->delimiters->line = result->lines;
-				result->delimiters->setName(stringbits[S_DELIMITSET].getTerminatedBuffer());
+				result->delimiters->setName(stringbits[S_DELIMITSET]);
 				AST_OPEN(Delimiters);
 				p += 10;
 				result->lines += SKIPWS(p, '=');
@@ -1563,7 +1590,7 @@ void TextualParser::parseFromUChar(UChar* input, const char* fname) {
 				}
 				result->soft_delimiters = result->allocateSet();
 				result->soft_delimiters->line = result->lines;
-				result->soft_delimiters->setName(stringbits[S_SOFTDELIMITSET].getTerminatedBuffer());
+				result->soft_delimiters->setName(stringbits[S_SOFTDELIMITSET]);
 				AST_OPEN(SoftDelimiters);
 				p += 15;
 				result->lines += SKIPWS(p, '=');
@@ -1867,7 +1894,7 @@ void TextualParser::parseFromUChar(UChar* input, const char* fname) {
 				s->rehash();
 				Set* tmp = result->getSet(s->hash);
 				if (tmp) {
-					if (verbosity_level > 0 && tmp->name[0] != '_' && tmp->name[1] != 'G' && tmp->name[2] != '_') {
+					if (verbosity_level > 0 && !is_internal(tmp->name)) {
 						u_fprintf(ux_stderr, "%s: Warning: LIST %S was defined twice with the same contents: Lines %u and %u.\n", filebase, s->name.c_str(), tmp->line, s->line);
 						u_fflush(ux_stderr);
 					}
@@ -1914,7 +1941,7 @@ void TextualParser::parseFromUChar(UChar* input, const char* fname) {
 				s->rehash();
 				Set* tmp = result->getSet(s->hash);
 				if (tmp) {
-					if (verbosity_level > 0 && tmp->name[0] != '_' && tmp->name[1] != 'G' && tmp->name[2] != '_') {
+					if (verbosity_level > 0 && !is_internal(tmp->name)) {
 						u_fprintf(ux_stderr, "%s: Warning: SET %S was defined twice with the same contents: Lines %u and %u.\n", filebase, s->name.c_str(), tmp->line, s->line);
 						u_fflush(ux_stderr);
 					}
@@ -1944,10 +1971,12 @@ void TextualParser::parseFromUChar(UChar* input, const char* fname) {
 			else if (IS_ICASE(p, "MAPPINGS", "mappings")) {
 				AST_OPEN(BeforeSections);
 				p += 8;
-				in_before_sections = true;
-				in_section = false;
-				in_after_sections = false;
-				in_null_section = false;
+				if (!only_sets) {
+					in_before_sections = true;
+					in_section = false;
+					in_after_sections = false;
+					in_null_section = false;
+				}
 				UChar* s = p;
 				SKIPLN(s);
 				SKIPWS(s);
@@ -1961,10 +1990,12 @@ void TextualParser::parseFromUChar(UChar* input, const char* fname) {
 			else if (IS_ICASE(p, "CORRECTIONS", "corrections")) {
 				AST_OPEN(BeforeSections);
 				p += 11;
-				in_before_sections = true;
-				in_section = false;
-				in_after_sections = false;
-				in_null_section = false;
+				if (!only_sets) {
+					in_before_sections = true;
+					in_section = false;
+					in_after_sections = false;
+					in_null_section = false;
+				}
 				UChar* s = p;
 				SKIPLN(s);
 				SKIPWS(s);
@@ -1978,10 +2009,12 @@ void TextualParser::parseFromUChar(UChar* input, const char* fname) {
 			else if (IS_ICASE(p, "BEFORE-SECTIONS", "before-sections")) {
 				AST_OPEN(BeforeSections);
 				p += 15;
-				in_before_sections = true;
-				in_section = false;
-				in_after_sections = false;
-				in_null_section = false;
+				if (!only_sets) {
+					in_before_sections = true;
+					in_section = false;
+					in_after_sections = false;
+					in_null_section = false;
+				}
 				UChar* s = p;
 				SKIPLN(s);
 				SKIPWS(s);
@@ -1995,11 +2028,13 @@ void TextualParser::parseFromUChar(UChar* input, const char* fname) {
 			else if (IS_ICASE(p, "SECTION", "section")) {
 				AST_OPEN(Section);
 				p += 7;
-				result->sections.push_back(result->lines);
-				in_before_sections = false;
-				in_section = true;
-				in_after_sections = false;
-				in_null_section = false;
+				if (!only_sets) {
+					result->sections.push_back(result->lines);
+					in_before_sections = false;
+					in_section = true;
+					in_after_sections = false;
+					in_null_section = false;
+				}
 				UChar* s = p;
 				SKIPLN(s);
 				SKIPWS(s);
@@ -2013,11 +2048,13 @@ void TextualParser::parseFromUChar(UChar* input, const char* fname) {
 			else if (IS_ICASE(p, "CONSTRAINTS", "constraints")) {
 				AST_OPEN(Section);
 				p += 11;
-				result->sections.push_back(result->lines);
-				in_before_sections = false;
-				in_section = true;
-				in_after_sections = false;
-				in_null_section = false;
+				if (!only_sets) {
+					result->sections.push_back(result->lines);
+					in_before_sections = false;
+					in_section = true;
+					in_after_sections = false;
+					in_null_section = false;
+				}
 				UChar* s = p;
 				SKIPLN(s);
 				SKIPWS(s);
@@ -2031,10 +2068,12 @@ void TextualParser::parseFromUChar(UChar* input, const char* fname) {
 			else if (IS_ICASE(p, "AFTER-SECTIONS", "after-sections")) {
 				AST_OPEN(AfterSections);
 				p += 14;
-				in_before_sections = false;
-				in_section = false;
-				in_after_sections = true;
-				in_null_section = false;
+				if (!only_sets) {
+					in_before_sections = false;
+					in_section = false;
+					in_after_sections = true;
+					in_null_section = false;
+				}
 				UChar* s = p;
 				SKIPLN(s);
 				SKIPWS(s);
@@ -2048,10 +2087,12 @@ void TextualParser::parseFromUChar(UChar* input, const char* fname) {
 			else if (IS_ICASE(p, "NULL-SECTION", "null-section")) {
 				AST_OPEN(NullSection);
 				p += 12;
-				in_before_sections = false;
-				in_section = false;
-				in_after_sections = false;
-				in_null_section = true;
+				if (!only_sets) {
+					in_before_sections = false;
+					in_section = false;
+					in_after_sections = false;
+					in_null_section = true;
+				}
 				UChar* s = p;
 				SKIPLN(s);
 				SKIPWS(s);
@@ -2120,9 +2161,9 @@ void TextualParser::parseFromUChar(UChar* input, const char* fname) {
 				while (*p != ';') {
 					bool found = false;
 					for (auto pair : pairs) {
-						if (ux_simplecasecmp(p, stringbits[pair.first].getTerminatedBuffer(), stringbits[pair.first].length())) {
+						if (ux_simplecasecmp(p, stringbits[pair.first])) {
 							AST_OPEN(Option);
-							p += stringbits[pair.first].length();
+							p += stringbits[pair.first].size();
 							AST_CLOSE(p);
 							*pair.second = true;
 							result->lines += SKIPWS(p);
@@ -2197,6 +2238,17 @@ void TextualParser::parseFromUChar(UChar* input, const char* fname) {
 				AST_OPEN(Include);
 				p += 7;
 				result->lines += SKIPWS(p);
+
+				bool local_only_sets = only_sets;
+				if (ux_simplecasecmp(p, stringbits[S_STATIC]) && ISSPACE(p[stringbits[S_STATIC].size()])) {
+					AST_OPEN(Option);
+					p += stringbits[S_STATIC].size();
+					result->lines += SKIPWS(p);
+					local_only_sets = true;
+					AST_CLOSE(p);
+				}
+				swapper<bool> osets(true, only_sets, local_only_sets);
+
 				AST_OPEN(IncludeFilename);
 				UChar* n = p;
 				result->lines += SKIPTOWS(n, 0, true);
@@ -2262,7 +2314,7 @@ void TextualParser::parseFromUChar(UChar* input, const char* fname) {
 
 				uint32_t olines = 0;
 				swapper<uint32_t> oswap(true, olines, result->lines);
-				const char* obase = 0;
+				const char* obase = nullptr;
 				swapper<const char*> bswap(true, obase, filebase);
 
 				parseFromUChar(&data[4], abspath.c_str());
@@ -2358,7 +2410,7 @@ void TextualParser::parseFromUChar(UChar* input, const char* fname) {
 
 				swapper_false swp(no_itmpls, no_itmpls);
 
-				ContextualTest* t = parseContextualTestList(p);
+				ContextualTest* t = parseContextualTestList(p, nullptr, true);
 				t->line = static_cast<uint32_t>(line);
 				result->addTemplate(t, name.c_str());
 
@@ -2381,8 +2433,8 @@ void TextualParser::parseFromUChar(UChar* input, const char* fname) {
 
 				while (*p && *p != ';') {
 					int32_t c = 0;
-					Tag* left = 0;
-					Tag* right = 0;
+					Tag* left = nullptr;
+					Tag* right = nullptr;
 					UChar* n = p;
 					result->lines += SKIPTOWS(n, '(', true);
 					if (*n != '(') {
@@ -2577,11 +2629,11 @@ int TextualParser::parse_grammar(const std::string& buffer) {
 }
 
 int TextualParser::parse_grammar(UString& data) {
-	result->addAnchor(keywords[K_START].getTerminatedBuffer(), 0, true);
+	result->addAnchor(keywords[K_START], 0, true);
 
 	// Allocate the magic * tag
 	{
-		Tag* tany = parseTag(stringbits[S_ASTERIK].getTerminatedBuffer());
+		Tag* tany = parseTag(stringbits[S_ASTERIK]);
 		result->tag_any = tany->hash;
 	}
 	// Create the dummy set
@@ -2590,8 +2642,8 @@ int TextualParser::parse_grammar(UString& data) {
 	{
 		Set* set_c = result->allocateSet();
 		set_c->line = 0;
-		set_c->setName(stringbits[S_UU_TARGET].getTerminatedBuffer());
-		Tag* t = parseTag(stringbits[S_UU_TARGET].getTerminatedBuffer());
+		set_c->setName(stringbits[S_UU_TARGET]);
+		Tag* t = parseTag(stringbits[S_UU_TARGET]);
 		result->addTagToSet(t, set_c);
 		result->addSet(set_c);
 	}
@@ -2599,8 +2651,8 @@ int TextualParser::parse_grammar(UString& data) {
 	{
 		Set* set_c = result->allocateSet();
 		set_c->line = 0;
-		set_c->setName(stringbits[S_UU_MARK].getTerminatedBuffer());
-		Tag* t = parseTag(stringbits[S_UU_MARK].getTerminatedBuffer());
+		set_c->setName(stringbits[S_UU_MARK]);
+		Tag* t = parseTag(stringbits[S_UU_MARK]);
 		result->addTagToSet(t, set_c);
 		result->addSet(set_c);
 	}
@@ -2608,28 +2660,28 @@ int TextualParser::parse_grammar(UString& data) {
 	{
 		Set* set_c = result->allocateSet();
 		set_c->line = 0;
-		set_c->setName(stringbits[S_UU_ATTACHTO].getTerminatedBuffer());
-		Tag* t = parseTag(stringbits[S_UU_ATTACHTO].getTerminatedBuffer());
+		set_c->setName(stringbits[S_UU_ATTACHTO]);
+		Tag* t = parseTag(stringbits[S_UU_ATTACHTO]);
 		result->addTagToSet(t, set_c);
 		result->addSet(set_c);
 	}
 	// Create the magic set _LEFT_ containing the tag _LEFT_
-	Set* s_left = 0;
+	Set* s_left = nullptr;
 	{
 		Set* set_c = s_left = result->allocateSet();
 		set_c->line = 0;
-		set_c->setName(stringbits[S_UU_LEFT].getTerminatedBuffer());
-		Tag* t = parseTag(stringbits[S_UU_LEFT].getTerminatedBuffer());
+		set_c->setName(stringbits[S_UU_LEFT]);
+		Tag* t = parseTag(stringbits[S_UU_LEFT]);
 		result->addTagToSet(t, set_c);
 		result->addSet(set_c);
 	}
 	// Create the magic set _RIGHT_ containing the tag _RIGHT_
-	Set* s_right = 0;
+	Set* s_right = nullptr;
 	{
 		Set* set_c = s_right = result->allocateSet();
 		set_c->line = 0;
-		set_c->setName(stringbits[S_UU_RIGHT].getTerminatedBuffer());
-		Tag* t = parseTag(stringbits[S_UU_RIGHT].getTerminatedBuffer());
+		set_c->setName(stringbits[S_UU_RIGHT]);
+		Tag* t = parseTag(stringbits[S_UU_RIGHT]);
 		result->addTagToSet(t, set_c);
 		result->addSet(set_c);
 	}
@@ -2637,8 +2689,8 @@ int TextualParser::parse_grammar(UString& data) {
 	{
 		Set* set_c = result->allocateSet();
 		set_c->line = 0;
-		set_c->setName(stringbits[S_UU_ENCL].getTerminatedBuffer());
-		Tag* t = parseTag(stringbits[S_UU_ENCL].getTerminatedBuffer());
+		set_c->setName(stringbits[S_UU_ENCL]);
+		Tag* t = parseTag(stringbits[S_UU_ENCL]);
 		result->addTagToSet(t, set_c);
 		result->addSet(set_c);
 	}
@@ -2646,7 +2698,7 @@ int TextualParser::parse_grammar(UString& data) {
 	{
 		Set* set_c = result->allocateSet();
 		set_c->line = 0;
-		set_c->setName(stringbits[S_UU_PAREN].getTerminatedBuffer());
+		set_c->setName(stringbits[S_UU_PAREN]);
 		set_c->set_ops.push_back(S_OR);
 		set_c->sets.push_back(s_left->hash);
 		set_c->sets.push_back(s_right->hash);
@@ -2656,15 +2708,15 @@ int TextualParser::parse_grammar(UString& data) {
 	{
 		Set* set_c = result->allocateSet();
 		set_c->line = 0;
-		set_c->setName(stringbits[S_UU_SAME_BASIC].getTerminatedBuffer());
-		Tag* t = parseTag(stringbits[S_UU_SAME_BASIC].getTerminatedBuffer());
+		set_c->setName(stringbits[S_UU_SAME_BASIC]);
+		Tag* t = parseTag(stringbits[S_UU_SAME_BASIC]);
 		result->addTagToSet(t, set_c);
 		result->addSet(set_c);
 	}
 
 	parseFromUChar(&data[4], filename);
 
-	result->addAnchor(keywords[K_END].getTerminatedBuffer(), static_cast<uint32_t>(result->rule_by_number.size() - 1), true);
+	result->addAnchor(keywords[K_END], static_cast<uint32_t>(result->rule_by_number.size() - 1), true);
 
 	for (auto it : result->rule_by_number) {
 		if (!it->name.empty()) {
@@ -2682,7 +2734,7 @@ int TextualParser::parse_grammar(UString& data) {
 			continue;
 		}
 		UChar* p = &tag->tag[0];
-		UChar* n = 0;
+		UChar* n = nullptr;
 		do {
 			SKIPTO(p, '{');
 			if (*p) {

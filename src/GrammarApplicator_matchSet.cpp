@@ -125,13 +125,8 @@ uint32_t GrammarApplicator::doesTagMatchIcase(uint32_t test, const Tag& tag, boo
 	}
 	else {
 		const Tag& itag = *(single_tags.find(test)->second);
-		UErrorCode status = U_ZERO_ERROR;
-		if (u_strCaseCompare(tag.tag.c_str(), static_cast<int32_t>(tag.tag.size()), itag.tag.c_str(), static_cast<int32_t>(itag.tag.size()), U_FOLD_CASE_DEFAULT, &status) == 0) {
+		if (ux_strCaseCompare(tag.tag, itag.tag)) {
 			match = itag.hash;
-		}
-		if (status != U_ZERO_ERROR) {
-			u_fprintf(ux_stderr, "Error: u_strCaseCompare() returned %s - cannot continue!\n", u_errorName(status));
-			CG3Quit(1);
 		}
 		if (match) {
 			index_icase_yes.insert(ih);
@@ -660,24 +655,23 @@ bool GrammarApplicator::doesSetMatchReading(const Reading& reading, const uint32
 	}
 	// &&unified sets
 	else if (theset.type & ST_SET_UNIFY) {
-		// ToDo: Handle multiple active &&sets at a time.
 		// First time, figure out all the sub-sets that match the reading and store them for later comparison
-		if (unif_sets_firstrun) {
+		auto& usets = (*unif_sets)[theset.number];
+		if (usets.empty()) {
 			const Set& uset = *grammar->sets_list[theset.sets[0]];
 			const size_t size = uset.sets.size();
 			for (size_t i = 0; i < size; ++i) {
 				const Set& tset = *grammar->sets_list[uset.sets[i]];
 				if (doesSetMatchReading(reading, tset.number, bypass_index, ((theset.type & ST_TAG_UNIFY) != 0) | unif_mode)) {
-					unif_sets->insert(tset.number);
+					usets.insert(tset.number);
 				}
 			}
-			retval = !unif_sets->empty();
-			unif_sets_firstrun = !retval;
+			retval = !usets.empty();
 		}
 		// Subsequent times, test whether any of the previously stored sets match the reading
 		else {
 			auto sets = ss_u32sv.get();
-			for (auto usi : *unif_sets) {
+			for (auto usi : usets) {
 				if (doesSetMatchReading(reading, usi, bypass_index, unif_mode)) {
 					sets->insert(usi);
 				}
@@ -740,7 +734,7 @@ bool GrammarApplicator::doesSetMatchReading(const Reading& reading, const uint32
 		}
 		// Propagate unified tag to other sets of this set, if applicable
 		if (unif_mode || (theset.type & ST_TAG_UNIFY)) {
-			const void* tag = 0;
+			const void* tag = nullptr;
 			for (size_t i = 0; i < size; ++i) {
 				auto it = unif_tags->find(theset.sets[i]);
 				if (it != unif_tags->end()) {
@@ -792,9 +786,9 @@ inline bool _check_options(std::vector<Reading*>& rv, uint32_t options, size_t n
 inline bool GrammarApplicator::doesSetMatchCohort_testLinked(Cohort& cohort, const Set& theset, dSMC_Context* context) {
 	bool retval = true;
 	bool reset = false;
-	const ContextualTest* linked = 0;
-	Cohort* min = 0;
-	Cohort* max = 0;
+	const ContextualTest* linked = nullptr;
+	Cohort* min = nullptr;
+	Cohort* max = nullptr;
 
 	if (context->test && context->test->linked) {
 		linked = context->test->linked;
@@ -833,7 +827,7 @@ inline bool GrammarApplicator::doesSetMatchCohort_testLinked(Cohort& cohort, con
 inline bool GrammarApplicator::doesSetMatchCohort_helper(Cohort& cohort, Reading& reading, const Set& theset, dSMC_Context* context) {
 	bool retval = false;
 	auto utags = ss_utags.get();
-	auto usets = ss_u32sv.get();
+	auto usets = ss_usets.get();
 	uint8_t orz = regexgrps.first;
 
 	if (context && !(current_rule->flags & FL_CAPTURE_UNIF) && (theset.type & ST_CHILD_UNIFY)) {
@@ -879,7 +873,7 @@ bool GrammarApplicator::doesSetMatchCohortNormal(Cohort& cohort, const uint32_t 
 
 	const Set* theset = grammar->sets_list[set];
 
-	if (cohort.wread) {
+	if (cohort.wread && (!context || !context->in_barrier)) {
 		retval = doesSetMatchCohort_helper(cohort, *cohort.wread, *theset, context);
 	}
 
@@ -896,7 +890,7 @@ bool GrammarApplicator::doesSetMatchCohortNormal(Cohort& cohort, const uint32_t 
 	}
 
 	for (auto list : lists) {
-		if (list == 0) {
+		if (list == nullptr) {
 			continue;
 		}
 		for (auto reading : *list) {
@@ -949,7 +943,7 @@ bool GrammarApplicator::doesSetMatchCohortCareful(Cohort& cohort, const uint32_t
 	}
 
 	for (auto list : lists) {
-		if (list == 0) {
+		if (list == nullptr) {
 			continue;
 		}
 		for (auto reading : *list) {

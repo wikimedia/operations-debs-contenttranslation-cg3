@@ -19,6 +19,8 @@ ADD (@self-or-child-S) ("em") (cS (PRP)) ;
 ADD (@self-or-child-c) ("em") (cS (S)) ;
 ADD (@self-or-child-error) ("em") (c (PRP)) ;
 
+ADD (@cc-found) ("two") (cc ("five")) ;
+
 ADD (@self-or-parent-S) ("em") (pS (PRP)) ;
 ADD (@self-or-parent-p) ("em") (pS (IND)) ;
 ADD (@self-or-parent-error) ("em") (p (PRP)) ;
@@ -69,3 +71,5 @@ ADD (@bag-self-or-prev) ("o") (B< ("<mulher>")) ;
 ADD (@bag-self-or-next) ("o") (B> ("<árvore>")) ;
 ADD (@bag-any) ("o") (BW ("<seven>")) ;
 ADD (@bag-any-not) ("o") (NOT BW ("<seven>")) ;
+
+ADD (@ss-cSN-good) TARGET ("lærer" @SUBJ>) (p (*) LINK **cSN (<mv>) BARRIER (V IMPF) LINK c (@<ACC) - (IARG) - (INS) - (<idf>) - (<refl>)) ;

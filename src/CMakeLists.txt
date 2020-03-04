@@ -5,9 +5,9 @@ if(NOT APPLE)
 endif()
 
 # Boost
-find_path(Boost_LOCAL NAMES boost/config.hpp PATHS "${CMAKE_CURRENT_SOURCE_DIR}/../include" NO_DEFAULT_PATH)
+find_path(Boost_LOCAL NAMES boost/config.hpp PATHS "../include" NO_DEFAULT_PATH)
 if(Boost_LOCAL)
-	set(BOOST_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../include")
+	set(BOOST_ROOT "../include")
 	find_package(Boost 1.53.0)
 endif()
 if(NOT Boost_FOUND)
@@ -116,36 +116,21 @@ set(LIBCG3_SOURCES
 	TextualParser.cpp
 	Window.cpp
 	uextras.cpp
-	${POPEN_PLUS_C}
+	${POPEN_PLUS_CPP}
 	${LIBCG3_HEADERS}
 	)
 if(MSVC)
 	set(LIBCG3_SOURCES
-		"${CMAKE_SOURCE_DIR}/include/win32/getopt.c"
+		"${CMAKE_SOURCE_DIR}/include/win32/getopt.cpp"
 		"${CMAKE_SOURCE_DIR}/include/win32/getopt.h"
 		${LIBCG3_SOURCES}
 		)
 endif()
 
-if(MSVC OR INSTALL_STATIC)
-	add_library(libcg3 STATIC libcg3.cpp ${LIBCG3_SOURCES})
-	set_target_properties(libcg3 PROPERTIES OUTPUT_NAME "cg3")
-	set_target_properties(libcg3 PROPERTIES PREFIX "lib")
-	if(MSVC AND NOT CMAKE_BUILD_TYPE STREQUAL Debug)
-		set_target_properties(libcg3 PROPERTIES STATIC_LIBRARY_FLAGS "/LTCG")
-	endif()
-	cg3_link(libcg3)
-	set(LINKLIB libcg3)
-endif()
-
-if(NOT MSVC)
-	add_library(libcg3-shared SHARED libcg3.cpp ${LIBCG3_SOURCES})
-	set_target_properties(libcg3-shared PROPERTIES SOVERSION ${_cg3_VERSION_MAJOR})
-	set_target_properties(libcg3-shared PROPERTIES OUTPUT_NAME "cg3")
-	set_target_properties(libcg3-shared PROPERTIES PREFIX "lib")
-	cg3_link(libcg3-shared)
-	set(LINKLIB libcg3-shared)
-endif()
+add_library(cg3 libcg3.cpp ${LIBCG3_SOURCES})
+set_target_properties(cg3 PROPERTIES SOVERSION ${_cg3_VERSION_MAJOR})
+cg3_link(cg3)
+set(LINKLIB cg3)
 
 add_executable(cg-comp cg_comp.cpp)
 cg3_link(cg-comp)
@@ -203,8 +188,8 @@ if(APPLE)
 			POST_BUILD
 			COMMAND install_name_tool -change libcg3.0.dylib @rpath/libcg3.0.dylib ${_file_${t}}
 			COMMAND install_name_tool -add_rpath @executable_path/ ${_file_${t}}
-			COMMAND install_name_tool -add_rpath @executable_path/../${CG_LIBDIR} ${_file_${t}}
-			COMMAND install_name_tool -add_rpath @loader_path/../${CG_LIBDIR} ${_file_${t}}
+			COMMAND install_name_tool -add_rpath @executable_path/../${CMAKE_INSTALL_LIBDIR} ${_file_${t}}
+			COMMAND install_name_tool -add_rpath @loader_path/../${CMAKE_INSTALL_LIBDIR} ${_file_${t}}
 			COMMENT "Adding @rpath to ${t}"
 			VERBATIM
 		)
@@ -213,12 +198,6 @@ endif()
 
 add_test(t_libcg3 test_libcg3 "${CMAKE_CURRENT_SOURCE_DIR}/../test/T_Select/grammar.cg3")
 
-if(INSTALL_STATIC)
-	install(TARGETS libcg3 ARCHIVE DESTINATION "${CG_LIBDIR}/${CMAKE_LIBRARY_ARCHITECTURE}")
-endif()
-
-if(NOT MSVC)
-	install(TARGETS libcg3-shared ARCHIVE DESTINATION "${CG_LIBDIR}/${CMAKE_LIBRARY_ARCHITECTURE}" LIBRARY DESTINATION "${CG_LIBDIR}/${CMAKE_LIBRARY_ARCHITECTURE}" RUNTIME DESTINATION bin)
-	install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/cg3.h" DESTINATION include)
-endif()
-install(TARGETS cg-comp cg-proc cg-relabel cg-mwesplit cg-conv vislcg3 RUNTIME DESTINATION bin)
+install(TARGETS cg3 ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(FILES cg3.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(TARGETS cg-comp cg-proc cg-relabel cg-mwesplit cg-conv vislcg3 RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

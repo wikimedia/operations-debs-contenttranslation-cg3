@@ -106,7 +106,7 @@ cg3_grammar* cg3_grammar_load(const char* filename) {
 
 	std::unique_ptr<IGrammarParser> parser;
 
-	if (cbuffers[0][0] == 'C' && cbuffers[0][1] == 'G' && cbuffers[0][2] == '3' && cbuffers[0][3] == 'B') {
+	if (is_cg3b(cbuffers[0])) {
 		parser.reset(new BinaryGrammar(*grammar, *ux_stderr));
 	}
 	else {
@@ -134,7 +134,7 @@ cg3_grammar* cg3_grammar_load_buffer(const char* buffer, size_t length) {
 
 	std::unique_ptr<IGrammarParser> parser;
 
-	if (buffer[0] == 'C' && buffer[1] == 'G' && buffer[2] == '3' && buffer[3] == 'B') {
+	if (is_cg3b(buffer)) {
 		parser.reset(new BinaryGrammar(*grammar, *ux_stderr));
 	}
 	else {
@@ -294,7 +294,7 @@ void cg3_sentence_runrules(cg3_applicator* applicator_, cg3_sentence* sentence_)
 	SingleWindow* sentence = static_cast<SingleWindow*>(sentence_);
 	applicator->gWindow->current = sentence;
 	applicator->runGrammarOnWindow();
-	applicator->gWindow->current = 0;
+	applicator->gWindow->current = nullptr;
 }
 
 size_t cg3_sentence_numcohorts(cg3_sentence* sentence_) {
@@ -366,7 +366,7 @@ void cg3_cohort_getrelation_u(cg3_cohort *cohort_, const UChar *rel, uint32_t *r
 	if ((cohort->type & CT_RELATED) && !cohort->relations.empty()) {
 		for (auto miter : cohort->relations) {
 			for (auto siter : miter->second) {
-				if (u_strcmp(ga->single_tags.find(miter.first)->second->tag.c_str(), rel) == 0) {
+				if (ga->single_tags.find(miter.first)->second->tag == rel) {
 					*rel_parent = siter;
 				}
 			}

@@ -30,7 +30,7 @@ MweSplitApplicator::MweSplitApplicator(std::ostream& ux_err)
 	grammar->ux_stderr = ux_stderr;
 	grammar->allocateDummySet();
 	grammar->delimiters = grammar->allocateSet();
-	grammar->addTagToSet(grammar->allocateTag(CG3::stringbits[0].getTerminatedBuffer()), grammar->delimiters);
+	grammar->addTagToSet(grammar->allocateTag(CG3::stringbits[0]), grammar->delimiters);
 	grammar->reindex();
 	setGrammar(grammar);
 	owns_grammar = true;
@@ -73,7 +73,7 @@ std::vector<Cohort*> MweSplitApplicator::splitMwe(Cohort* cohort) {
 
 	if (n_wftags < n_goodreadings) {
 		if (n_wftags > 0) {
-			u_fprintf(ux_stderr, "WARNING: Line %u: Some but not all main-readings of %S had wordform-tags (not completely mwe-disambiguated?), not splitting.\n", numLines, cohort->wordform->tag.c_str());
+			u_fprintf(ux_stderr, "WARNING: Line %u: Some but not all main-readings of %S had wordform-tags (not completely mwe-disambiguated?), not splitting.\n", cohort->line_number, cohort->wordform->tag.c_str());
 			// We also don't split if wordform-tags were only on sub-readings, but should we warn on such faulty input?
 		}
 		cos.push_back(cohort);
@@ -125,7 +125,7 @@ std::vector<Cohort*> MweSplitApplicator::splitMwe(Cohort* cohort) {
 
 				if (prev != NULL) {
 					free_reading(prev->next);
-					prev->next = 0;
+					prev->next = nullptr;
 				}
 				prev = rNew;
 			}
@@ -148,14 +148,14 @@ void MweSplitApplicator::printSingleWindow(SingleWindow* window, std::ostream& o
 		if (iter != window->variables_set.end()) {
 			if (iter->second != grammar->tag_any) {
 				Tag* value = single_tags[iter->second];
-				u_fprintf(output, "%S%S=%S>\n", stringbits[S_CMD_SETVAR].getTerminatedBuffer(), key->tag.c_str(), value->tag.c_str());
+				u_fprintf(output, "%S%S=%S>\n", stringbits[S_CMD_SETVAR].c_str(), key->tag.c_str(), value->tag.c_str());
 			}
 			else {
-				u_fprintf(output, "%S%S>\n", stringbits[S_CMD_SETVAR].getTerminatedBuffer(), key->tag.c_str());
+				u_fprintf(output, "%S%S>\n", stringbits[S_CMD_SETVAR].c_str(), key->tag.c_str());
 			}
 		}
 		else {
-			u_fprintf(output, "%S%S>\n", stringbits[S_CMD_REMVAR].getTerminatedBuffer(), key->tag.c_str());
+			u_fprintf(output, "%S%S>\n", stringbits[S_CMD_REMVAR].c_str(), key->tag.c_str());
 		}
 	}
 

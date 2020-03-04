@@ -32,6 +32,14 @@
 	#pragma warning (disable: 4458)
 	// warning C4312: 'operation' : conversion from 'type1' to 'type2' of greater size 
 	#pragma warning (disable: 4312)
+
+	#if !defined(cg3_EXPORTS)
+		#define CG3_IMPORTS __declspec(dllimport)
+	#else
+		#define CG3_IMPORTS
+	#endif
+#else
+	#define CG3_IMPORTS
 #endif
 
 #include <exception>
@@ -117,6 +125,22 @@ typedef std::basic_string<UChar> UString;
 typedef std::vector<UString> UStringVector;
 typedef std::vector<uint32_t> uint32Vector;
 namespace bc = ::boost::container;
+
+inline UString operator "" _us(const char* str, std::size_t len) {
+	UString us(len, 0);
+	for (size_t i = 0; i < len; ++i) {
+		us[i] = str[i];
+	}
+	return us;
+}
+
+inline UString operator "" _us(const char16_t* str, std::size_t len) {
+	UString us(len, 0);
+	for (size_t i = 0; i < len; ++i) {
+		us[i] = str[i];
+	}
+	return us;
+}
 }
 
 #include "inlines.hpp"
