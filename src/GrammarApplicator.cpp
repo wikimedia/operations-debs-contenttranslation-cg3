@@ -69,9 +69,9 @@ GrammarApplicator::GrammarApplicator(std::ostream& ux_err)
   , has_dep(false)
   , dep_highest_seen(0)
   , has_relations(false)
-  , grammar(0)
+  , grammar(nullptr)
   , ux_stderr(&ux_err)
-  , filebase(0)
+  , filebase(nullptr)
   , numLines(0)
   , numWindows(0)
   , numCohorts(0)
@@ -85,25 +85,24 @@ GrammarApplicator::GrammarApplicator(std::ostream& ux_err)
   , begintag(0)
   , endtag(0)
   , substtag(0)
-  , tag_begin(0)
-  , tag_end(0)
-  , tag_subst(0)
+  , tag_begin(nullptr)
+  , tag_end(nullptr)
+  , tag_subst(nullptr)
   , par_left_tag(0)
   , par_right_tag(0)
   , par_left_pos(0)
   , par_right_pos(0)
   , did_final_enclosure(false)
   , same_basic(0)
-  , target(0)
-  , mark(0)
-  , attach_to(0)
-  , current_rule(0)
-  , unif_tags(0)
+  , target(nullptr)
+  , mark(nullptr)
+  , attach_to(nullptr)
+  , current_rule(nullptr)
+  , unif_tags(nullptr)
   , unif_last_wordform(0)
   , unif_last_baseform(0)
   , unif_last_textual(0)
-  , unif_sets(0)
-  , unif_sets_firstrun(false)
+  , unif_sets(nullptr)
   , statistics(false)
 {
 	gWindow.reset(new Window(this));
@@ -119,8 +118,8 @@ GrammarApplicator::~GrammarApplicator() {
 	if (owns_grammar) {
 		delete grammar;
 	}
-	grammar = 0;
-	ux_stderr = 0;
+	grammar = nullptr;
+	ux_stderr = nullptr;
 }
 
 void GrammarApplicator::resetIndexes() {
@@ -139,9 +138,9 @@ void GrammarApplicator::resetIndexes() {
 void GrammarApplicator::setGrammar(Grammar* res) {
 	grammar = res;
 	single_tags = grammar->single_tags;
-	tag_begin = addTag(stringbits[S_BEGINTAG].getTerminatedBuffer());
-	tag_end = addTag(stringbits[S_ENDTAG].getTerminatedBuffer());
-	tag_subst = addTag(stringbits[S_IGNORE].getTerminatedBuffer());
+	tag_begin = addTag(stringbits[S_BEGINTAG]);
+	tag_end = addTag(stringbits[S_ENDTAG]);
+	tag_subst = addTag(stringbits[S_IGNORE]);
 	begintag = tag_begin->hash;
 	endtag = tag_end->hash;
 	substtag = tag_subst->hash;
@@ -219,7 +218,7 @@ void GrammarApplicator::index() {
 		valid_rules = vr;
 	}
 
-	constexpr UChar local_utf_pattern[] = { ' ', '#', '%', 'u', '%', '0', '?', 'u', L'\u2192', '%', 'u', '%', '0', '?', 'u', 0 };
+	constexpr UChar local_utf_pattern[] = { ' ', '#', '%', 'u', '%', '0', '?', 'u', u'\u2192', '%', 'u', '%', '0', '?', 'u', 0 };
 	constexpr UChar local_latin_pattern[] = { ' ', '#', '%', 'u', '%', '0', '?', 'u', '-', '>', '%', 'u', '%', '0', '?', 'u', 0 };
 
 	span_pattern_utf = local_utf_pattern;
@@ -274,11 +273,11 @@ Tag* GrammarApplicator::addTag(Tag* tag) {
 Tag* GrammarApplicator::addTag(const UChar* txt, bool vstr) {
 	Taguint32HashMap::iterator it;
 	uint32_t thash = hash_value(txt);
-	if ((it = single_tags.find(thash)) != single_tags.end() && !it->second->tag.empty() && u_strcmp(it->second->tag.c_str(), txt) == 0) {
+	if ((it = single_tags.find(thash)) != single_tags.end() && !it->second->tag.empty() && it->second->tag == txt) {
 		return it->second;
 	}
 
-	Tag* tag = 0;
+	Tag* tag = nullptr;
 	if (vstr) {
 		tag = ::CG3::parseTag(txt, 0, *this);
 	}
@@ -315,14 +314,9 @@ Tag* GrammarApplicator::addTag(const UChar* txt, bool vstr) {
 					continue;
 				}
 				for (auto iter : grammar->icase_tags) {
-					UErrorCode status = U_ZERO_ERROR;
-					if (u_strCaseCompare(titer.second->tag.c_str(), static_cast<int32_t>(titer.second->tag.size()), iter->tag.c_str(), static_cast<int32_t>(iter->tag.size()), U_FOLD_CASE_DEFAULT, &status) == 0) {
+					if (ux_strCaseCompare(titer.second->tag, iter->tag)) {
 						titer.second->type |= T_TEXTUAL;
 						reflow = true;
-					}
-					if (status != U_ZERO_ERROR) {
-						u_fprintf(ux_stderr, "Error: u_strCaseCompare(addTag) returned %s - cannot continue!\n", u_errorName(status));
-						CG3Quit(1);
 					}
 				}
 			}
@@ -342,7 +336,7 @@ Tag* GrammarApplicator::addTag(const UString& txt, bool vstr) {
 void GrammarApplicator::printTrace(std::ostream& output, uint32_t hit_by) {
 	if (hit_by < grammar->rule_by_number.size()) {
 		const Rule* r = grammar->rule_by_number[hit_by];
-		u_fprintf(output, "%S", keywords[r->type].getTerminatedBuffer());
+		u_fprintf(output, "%S", keywords[r->type].c_str());
 		if (r->type == K_ADDRELATION || r->type == K_SETRELATION || r->type == K_REMRELATION || r->type == K_ADDRELATIONS || r->type == K_SETRELATIONS || r->type == K_REMRELATIONS) {
 			u_fprintf(output, "(%S", r->maplist->getNonEmpty().begin()->first->tag.c_str());
 			if (r->type == K_ADDRELATIONS || r->type == K_SETRELATIONS || r->type == K_REMRELATIONS) {
@@ -412,7 +406,7 @@ void GrammarApplicator::printReading(const Reading* reading, std::ostream& outpu
 		if (!reading->parent->dep_self) {
 			reading->parent->dep_self = reading->parent->global_number;
 		}
-		const Cohort* pr = 0;
+		const Cohort* pr = nullptr;
 		pr = reading->parent;
 		if (reading->parent->dep_parent != DEP_NO_PARENT) {
 			if (reading->parent->dep_parent == 0) {
@@ -423,7 +417,7 @@ void GrammarApplicator::printReading(const Reading* reading, std::ostream& outpu
 			}
 		}
 
-		constexpr UChar local_utf_pattern[] = { ' ', '#', '%', 'u', L'\u2192', '%', 'u', 0 };
+		constexpr UChar local_utf_pattern[] = { ' ', '#', '%', 'u', u'\u2192', '%', 'u', 0 };
 		constexpr UChar local_latin_pattern[] = { ' ', '#', '%', 'u', '-', '>', '%', 'u', 0 };
 		const UChar* pattern = local_latin_pattern;
 		if (unicode_tags) {
@@ -512,13 +506,16 @@ void GrammarApplicator::printCohort(Cohort* cohort, std::ostream& output) {
 		mergeMappings(*cohort);
 	}
 
+	std::sort(cohort->readings.begin(), cohort->readings.end(), CG3::Reading::cmp_number);
 	for (auto rter1 : cohort->readings) {
 		printReading(rter1, output);
 	}
 	if (trace && !trace_no_removed) {
+		std::sort(cohort->delayed.begin(), cohort->delayed.end(), CG3::Reading::cmp_number);
 		for (auto rter3 : cohort->delayed) {
 			printReading(rter3, output);
 		}
+		std::sort(cohort->deleted.begin(), cohort->deleted.end(), CG3::Reading::cmp_number);
 		for (auto rter2 : cohort->deleted) {
 			printReading(rter2, output);
 		}
@@ -544,14 +541,14 @@ void GrammarApplicator::printSingleWindow(SingleWindow* window, std::ostream& ou
 		if (iter != window->variables_set.end()) {
 			if (iter->second != grammar->tag_any) {
 				Tag* value = single_tags[iter->second];
-				u_fprintf(output, "%S%S=%S>\n", stringbits[S_CMD_SETVAR].getTerminatedBuffer(), key->tag.c_str(), value->tag.c_str());
+				u_fprintf(output, "%S%S=%S>\n", stringbits[S_CMD_SETVAR].c_str(), key->tag.c_str(), value->tag.c_str());
 			}
 			else {
-				u_fprintf(output, "%S%S>\n", stringbits[S_CMD_SETVAR].getTerminatedBuffer(), key->tag.c_str());
+				u_fprintf(output, "%S%S>\n", stringbits[S_CMD_SETVAR].c_str(), key->tag.c_str());
 			}
 		}
 		else {
-			u_fprintf(output, "%S%S>\n", stringbits[S_CMD_REMVAR].getTerminatedBuffer(), key->tag.c_str());
+			u_fprintf(output, "%S%S>\n", stringbits[S_CMD_REMVAR].c_str(), key->tag.c_str());
 		}
 	}
 

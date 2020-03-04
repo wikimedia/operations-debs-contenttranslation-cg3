@@ -55,15 +55,15 @@ Cohort::Cohort(SingleWindow* p)
   : type(0)
   , global_number(0)
   , local_number(0)
-  , wordform(0)
+  , wordform(nullptr)
   , dep_self(0)
   , dep_parent(DEP_NO_PARENT)
   , is_pleft(0)
   , is_pright(0)
   , parent(p)
-  , prev(0)
-  , next(0)
-  , wread(0)
+  , prev(nullptr)
+  , next(nullptr)
+  , wread(nullptr)
 {
 	#ifdef CG_TRACE_OBJECTS
 	std::cerr << "OBJECT: " << __PRETTY_FUNCTION__ << std::endl;
@@ -106,12 +106,12 @@ void Cohort::clear() {
 	type = 0;
 	global_number = 0;
 	local_number = 0;
-	wordform = 0;
+	wordform = nullptr;
 	dep_self = 0;
 	dep_parent = DEP_NO_PARENT;
 	is_pleft = 0;
 	is_pright = 0;
-	parent = 0;
+	parent = nullptr;
 
 	text.clear();
 	num_max.clear();
@@ -135,7 +135,7 @@ void Cohort::clear() {
 	readings.clear();
 	deleted.clear();
 	delayed.clear();
-	wread = 0;
+	wread = nullptr;
 
 	for (auto iter : removed) {
 		free_cohort(iter);
@@ -151,7 +151,7 @@ void Cohort::detach() {
 	if (next) {
 		next->prev = prev;
 	}
-	prev = next = 0;
+	prev = next = nullptr;
 }
 
 void Cohort::addChild(uint32_t child) {
@@ -162,12 +162,16 @@ void Cohort::remChild(uint32_t child) {
 	dep_children.erase(child);
 }
 
-void Cohort::appendReading(Reading* read) {
+void Cohort::appendReading(Reading* read, ReadingList& readings) {
 	readings.push_back(read);
 	if (read->number == 0) {
 		read->number = static_cast<uint32_t>(readings.size() * 1000 + 1000);
 	}
 	type &= ~CT_NUM_CURRENT;
+}
+
+void Cohort::appendReading(Reading* read) {
+	return appendReading(read, readings);
 }
 
 Reading* Cohort::allocateAppendReading() {
@@ -250,5 +254,12 @@ bool Cohort::remRelation(uint32_t rel, uint32_t cohort) {
 		return (sz != relations.find(rel)->second.size());
 	}
 	return false;
+}
+
+void Cohort::setRelated() {
+	type |= CT_RELATED;
+	for (auto& r : readings) {
+		r->noprint = false;
+	}
 }
 }

@@ -90,23 +90,25 @@ void GrammarApplicator::runGrammarOnText(std::istream& input, std::ostream& outp
 		}
 	}
 
-	std::vector<UChar> line(1024, 0);
-	std::vector<UChar> cleaned(line.size() + 1, 0);
+	UString line(1024, 0);
+	UString cleaned(line.size() + 1, 0);
 	bool ignoreinput = false;
 	bool did_soft_lookback = false;
+	bool is_deleted = false;
+	ReadingList* readings;
 
 	index();
 
 	uint32_t resetAfter = ((num_windows + 4) * 2 + 1);
 	uint32_t lines = 0;
 
-	SingleWindow* cSWindow = 0;
-	Cohort* cCohort = 0;
-	Reading* cReading = 0;
+	SingleWindow* cSWindow = nullptr;
+	Cohort* cCohort = nullptr;
+	Reading* cReading = nullptr;
 
-	SingleWindow* lSWindow = 0;
-	Cohort* lCohort = 0;
-	Reading* lReading = 0;
+	SingleWindow* lSWindow = nullptr;
+	Cohort* lCohort = nullptr;
+	Reading* lReading = nullptr;
 
 	gWindow->window_span = num_windows;
 	gtimer = getticks();
@@ -216,9 +218,10 @@ void GrammarApplicator::runGrammarOnText(std::istream& input, std::ostream& outp
 
 				splitAllMappings(all_mappings, *cCohort, true);
 				cSWindow->appendCohort(cCohort);
+				cCohort->line_number = numLines;
 				lSWindow = cSWindow;
-				cSWindow = 0;
-				cCohort = 0;
+				cSWindow = nullptr;
+				cCohort = nullptr;
 				numCohorts++;
 				did_soft_lookback = false;
 			}
@@ -233,9 +236,10 @@ void GrammarApplicator::runGrammarOnText(std::istream& input, std::ostream& outp
 
 				splitAllMappings(all_mappings, *cCohort, true);
 				cSWindow->appendCohort(cCohort);
+				cCohort->line_number = numLines;
 				lSWindow = cSWindow;
-				cSWindow = 0;
-				cCohort = 0;
+				cSWindow = nullptr;
+				cCohort = nullptr;
 				numCohorts++;
 				did_soft_lookback = false;
 			}
@@ -252,7 +256,7 @@ void GrammarApplicator::runGrammarOnText(std::istream& input, std::ostream& outp
 				variables_output.clear();
 
 				lSWindow = cSWindow;
-				cCohort = 0;
+				cCohort = nullptr;
 				numWindows++;
 				did_soft_lookback = false;
 			}
@@ -275,9 +279,10 @@ void GrammarApplicator::runGrammarOnText(std::istream& input, std::ostream& outp
 			cCohort->global_number = gWindow->cohort_counter++;
 			cCohort->wordform = addTag(&cleaned[0]);
 			lCohort = cCohort;
-			lReading = 0;
+			lReading = nullptr;
 			indents.clear();
 			numCohorts++;
+			cCohort->line_number = numLines;
 
 			space += 2;
 			if (space[0]) {
@@ -299,6 +304,10 @@ void GrammarApplicator::runGrammarOnText(std::istream& input, std::ostream& outp
 			}
 		}
 		else if (cleaned[0] == ' ' && cleaned[1] == '"' && cCohort) {
+			is_deleted = false;
+			readings = &cCohort->readings;
+
+		got_reading:
 			// Count current indent level
 			size_t indent = 0;
 			while (ISSPACE(line[indent])) {
@@ -311,7 +320,7 @@ void GrammarApplicator::runGrammarOnText(std::istream& input, std::ostream& outp
 				if (indents.back().second->next) {
 					u_fprintf(ux_stderr, "Warning: Sub-reading %S on line %u will be ignored and lost as each reading currently only can have one sub-reading.\n", &cleaned[0], numLines);
 					u_fflush(ux_stderr);
-					cReading = 0;
+					cReading = nullptr;
 					continue;
 				}
 				cReading = indents.back().second->allocateReading(indents.back().second->parent);
@@ -337,12 +346,19 @@ void GrammarApplicator::runGrammarOnText(std::istream& input, std::ostream& outp
 				u_fprintf(ux_stderr, "Warning: %S on line %u looked like a reading but wasn't - treated as text.\n", &cleaned[0], numLines);
 				u_fflush(ux_stderr);
 				if (!indents.empty() && indents.back().second->next == cReading) {
-					indents.back().second->next = 0;
+					indents.back().second->next = nullptr;
 				}
 				delete cReading;
-				cReading = 0;
+				cReading = nullptr;
+				if (is_deleted) {
+					// ToDo: Use string_view instead, when able
+					cleaned.insert(cleaned.begin(), ';');
+					line.insert(line.begin(), ';');
+				}
 				goto istext;
 			}
+
+			cReading->deleted = is_deleted;
 
 			while (space && (space = u_strchr(space, ' ')) != 0) {
 				space[0] = 0;
@@ -376,7 +392,7 @@ void GrammarApplicator::runGrammarOnText(std::istream& input, std::ostream& outp
 				u_fflush(ux_stderr);
 			}
 			if (indents.empty() || indent <= indents.back().first) {
-				cCohort->appendReading(cReading);
+				cCohort->appendReading(cReading, *readings);
 			}
 			else {
 				auto iter = all_mappings.find(cReading);
@@ -389,13 +405,13 @@ void GrammarApplicator::runGrammarOnText(std::istream& input, std::ostream& outp
 					splitMappings(iter->second, *cCohort, *cReading, true);
 					all_mappings.erase(iter);
 				}
-				cCohort->readings.back()->rehash();
+				readings->back()->rehash();
 			}
 			indents.push_back(std::make_pair(indent, cReading));
 			numReadings++;
 
 			// Check whether the cohort still belongs to the window, as per --dep-delimit
-			if (dep_delimit && dep_highest_seen && (cCohort->dep_self <= dep_highest_seen || cCohort->dep_self - dep_highest_seen > dep_delimit)) {
+			if (!is_deleted && dep_delimit && dep_highest_seen && (cCohort->dep_self <= dep_highest_seen || cCohort->dep_self - dep_highest_seen > dep_delimit)) {
 				reflowDependencyWindow(cCohort->global_number);
 				gWindow->dep_map.clear();
 				gWindow->dep_window.clear();
@@ -427,6 +443,13 @@ void GrammarApplicator::runGrammarOnText(std::istream& input, std::ostream& outp
 				}
 			}
 		}
+		else if (pipe_deleted && cleaned[0] == ';' && cleaned[1] == ' ' && cleaned[2] == '"' && cCohort) {
+			is_deleted = true;
+			readings = &cCohort->deleted;
+			cleaned.erase(cleaned.begin());
+			line.erase(line.begin());
+			goto got_reading;
+		}
 		else {
 			if (cleaned[0] == ' ' && cleaned[1] == '"') {
 				if (verbosity_level > 0) {
@@ -436,7 +459,7 @@ void GrammarApplicator::runGrammarOnText(std::istream& input, std::ostream& outp
 			}
 		istext:
 			if (cleaned[0]) {
-				if (u_strcmp(&cleaned[0], stringbits[S_CMD_FLUSH].getTerminatedBuffer()) == 0) {
+				if (&cleaned[0] == stringbits[S_CMD_FLUSH]) {
 					if (verbosity_level > 0) {
 						u_fprintf(ux_stderr, "Info: FLUSH encountered on line %u. Flushing...\n", numLines);
 					}
@@ -449,9 +472,9 @@ void GrammarApplicator::runGrammarOnText(std::istream& input, std::ostream& outp
 						for (auto iter : cCohort->readings) {
 							addTagToReading(*iter, endtag);
 						}
-						cReading = lReading = 0;
-						cCohort = lCohort = 0;
-						cSWindow = lSWindow = 0;
+						cReading = lReading = nullptr;
+						cCohort = lCohort = nullptr;
+						cSWindow = lSWindow = nullptr;
 					}
 					while (!gWindow->next.empty()) {
 						gWindow->shuffleWindowsDown();
@@ -479,31 +502,31 @@ void GrammarApplicator::runGrammarOnText(std::istream& input, std::ostream& outp
 					fflush(stdout);
 					fflush(stderr);
 				}
-				else if (u_strcmp(&cleaned[0], stringbits[S_CMD_IGNORE].getTerminatedBuffer()) == 0) {
+				else if (&cleaned[0] == stringbits[S_CMD_IGNORE]) {
 					if (verbosity_level > 0) {
 						u_fprintf(ux_stderr, "Info: IGNORE encountered on line %u. Passing through all input...\n", numLines);
 					}
 					ignoreinput = true;
 				}
-				else if (u_strcmp(&cleaned[0], stringbits[S_CMD_RESUME].getTerminatedBuffer()) == 0) {
+				else if (&cleaned[0] == stringbits[S_CMD_RESUME]) {
 					if (verbosity_level > 0) {
 						u_fprintf(ux_stderr, "Info: RESUME encountered on line %u. Resuming CG...\n", numLines);
 					}
 					ignoreinput = false;
 				}
-				else if (u_strcmp(&cleaned[0], stringbits[S_CMD_EXIT].getTerminatedBuffer()) == 0) {
+				else if (&cleaned[0] == stringbits[S_CMD_EXIT]) {
 					if (verbosity_level > 0) {
 						u_fprintf(ux_stderr, "Info: EXIT encountered on line %u. Exiting...\n", numLines);
 					}
 					u_fprintf(output, "%S", &line[0]);
 					goto CGCMD_EXIT;
 				}
-				else if (u_strncmp(&cleaned[0], stringbits[S_CMD_SETVAR].getTerminatedBuffer(), stringbits[S_CMD_SETVAR].length()) == 0) {
+				else if (u_strncmp(&cleaned[0], stringbits[S_CMD_SETVAR].c_str(), stringbits[S_CMD_SETVAR].size()) == 0) {
 					//u_fprintf(ux_stderr, "Info: SETVAR encountered on line %u.\n", numLines);
 					cleaned[packoff - 1] = 0;
 					line[0] = 0;
 
-					UChar* s = &cleaned[stringbits[S_CMD_SETVAR].length()];
+					UChar* s = &cleaned[stringbits[S_CMD_SETVAR].size()];
 					UChar* c = u_strchr(s, ',');
 					UChar* d = u_strchr(s, '=');
 					if (c == 0 && d == 0) {
@@ -511,14 +534,14 @@ void GrammarApplicator::runGrammarOnText(std::istream& input, std::ostream& outp
 						variables_set[tag->hash] = grammar->tag_any;
 						variables_rem.erase(tag->hash);
 						variables_output.insert(tag->hash);
-						if (cSWindow == 0) {
+						if (cSWindow == nullptr) {
 							variables[tag->hash] = grammar->tag_any;
 						}
 					}
 					else {
 						uint32_t a = 0, b = 0;
 						while (c || d) {
-							if (d && (d < c || c == 0)) {
+							if (d && (d < c || c == nullptr)) {
 								d[0] = 0;
 								if (!s[0]) {
 									u_fprintf(ux_stderr, "Warning: SETVAR on line %u had no identifier before the =! Defaulting to identifier *.\n", numLines);
@@ -539,14 +562,14 @@ void GrammarApplicator::runGrammarOnText(std::istream& input, std::ostream& outp
 									b = addTag(d + 1)->hash;
 								}
 								if (!c) {
-									d = 0;
-									s = 0;
+									d = nullptr;
+									s = nullptr;
 								}
 								variables_set[a] = b;
 								variables_rem.erase(a);
 								variables_output.insert(a);
 							}
-							else if (c && (c < d || d == 0)) {
+							else if (c && (c < d || d == nullptr)) {
 								c[0] = 0;
 								if (!s[0]) {
 									u_fprintf(ux_stderr, "Warning: SETVAR on line %u had no identifier after the ,! Defaulting to identifier *.\n", numLines);
@@ -563,23 +586,23 @@ void GrammarApplicator::runGrammarOnText(std::istream& input, std::ostream& outp
 							if (s) {
 								c = u_strchr(s, ',');
 								d = u_strchr(s, '=');
-								if (c == 0 && d == 0) {
+								if (c == nullptr && d == nullptr) {
 									a = addTag(s)->hash;
 									variables_set[a] = grammar->tag_any;
 									variables_rem.erase(a);
 									variables_output.insert(a);
-									s = 0;
+									s = nullptr;
 								}
 							}
 						}
 					}
 				}
-				else if (u_strncmp(&cleaned[0], stringbits[S_CMD_REMVAR].getTerminatedBuffer(), stringbits[S_CMD_REMVAR].length()) == 0) {
+				else if (u_strncmp(&cleaned[0], stringbits[S_CMD_REMVAR].c_str(), stringbits[S_CMD_REMVAR].size()) == 0) {
 					//u_fprintf(ux_stderr, "Info: REMVAR encountered on line %u.\n", numLines);
 					cleaned[packoff - 1] = 0;
 					line[0] = 0;
 
-					UChar* s = &cleaned[stringbits[S_CMD_REMVAR].length()];
+					UChar* s = &cleaned[stringbits[S_CMD_REMVAR].size()];
 					UChar* c = u_strchr(s, ',');
 					uint32_t a = 0;
 					while (c && *c) {
@@ -629,9 +652,9 @@ void GrammarApplicator::runGrammarOnText(std::istream& input, std::ostream& outp
 		for (auto iter : cCohort->readings) {
 			addTagToReading(*iter, endtag);
 		}
-		cReading = 0;
-		cCohort = 0;
-		cSWindow = 0;
+		cReading = nullptr;
+		cCohort = nullptr;
+		cSWindow = nullptr;
 	}
 	while (!gWindow->next.empty()) {
 		gWindow->shuffleWindowsDown();

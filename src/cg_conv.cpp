@@ -99,7 +99,7 @@ int main(int argc, char* argv[]) {
 	grammar.ux_stderr = &std::cerr;
 	grammar.allocateDummySet();
 	grammar.delimiters = grammar.allocateSet();
-	grammar.addTagToSet(grammar.allocateTag(CG3::stringbits[0].getTerminatedBuffer()), grammar.delimiters);
+	grammar.addTagToSet(grammar.allocateTag(CG3::stringbits[0]), grammar.delimiters);
 	grammar.reindex();
 
 	CG3::FormatConverter applicator(std::cerr);
@@ -176,7 +176,7 @@ int main(int argc, char* argv[]) {
 			throw std::runtime_error("UTF-8 to UTF-16 conversion failed");
 		}
 		buffer.resize(nr);
-		URegularExpression* rx = 0;
+		URegularExpression* rx = nullptr;
 
 		for (;;) {
 			rx = uregex_openC("^\"<[^>]+>\".*?^\\s+\"[^\"]+\"", UREGEX_DOTALL | UREGEX_MULTILINE, 0, &status);
@@ -271,6 +271,10 @@ int main(int argc, char* argv[]) {
 	}
 	else if (options[OUT_PLAIN].doesOccur) {
 		applicator.setOutputFormat(CG3::FMT_PLAIN);
+	}
+
+	if (options[PIPE_DELETED].doesOccur) {
+		applicator.pipe_deleted = true;
 	}
 
 	applicator.is_conv = true;

@@ -35,8 +35,9 @@ namespace detail {
 		if (first != last) {
 			ForwardIt next = first;
 			while (++next != last) {
-				if (comp(*next, *first))
+				if (comp(*next, *first)) {
 					return false;
+				}
 				first = next;
 			}
 		}
@@ -97,7 +98,7 @@ public:
 			return;
 		}
 
-		static container merged;
+		static thread_local container merged;
 		merged.resize(0);
 		merged.reserve(elements.size() + d);
 
@@ -105,14 +106,14 @@ public:
 			std::merge(elements.begin(), elements.end(), b, e, std::back_inserter(merged), comp);
 		}
 		else {
-			static container sorted;
+			static thread_local container sorted;
 			sorted.assign(b, e);
 			std::sort(sorted.begin(), sorted.end(), comp);
 			std::merge(elements.begin(), elements.end(), sorted.begin(), sorted.end(), std::back_inserter(merged), comp);
 		}
 
 		merged.swap(elements);
-		iterator it = std::unique(elements.begin(), elements.end());
+		auto it = std::unique(elements.begin(), elements.end());
 		elements.erase(it, elements.end());
 	}
 
@@ -124,13 +125,13 @@ public:
 		if (elements.empty()) {
 			return false;
 		}
-		else if (comp(elements.back(), t)) {
+		if (comp(elements.back(), t)) {
 			return false;
 		}
-		else if (comp(t, elements.front())) {
+		if (comp(t, elements.front())) {
 			return false;
 		}
-		iterator it = lower_bound(t);
+		auto it = lower_bound(t);
 		if (it != elements.end() && !comp(*it, t) && !comp(t, *it)) {
 			elements.erase(it);
 			return true;
@@ -154,13 +155,13 @@ public:
 		if (elements.empty()) {
 			return elements.end();
 		}
-		else if (comp(elements.back(), t)) {
+		if (comp(elements.back(), t)) {
 			return elements.end();
 		}
-		else if (comp(t, elements.front())) {
+		if (comp(t, elements.front())) {
 			return elements.end();
 		}
-		const_iterator it = lower_bound(t);
+		auto it = lower_bound(t);
 		if (it != elements.end() && (comp(*it, t) || comp(t, *it))) {
 			return elements.end();
 		}

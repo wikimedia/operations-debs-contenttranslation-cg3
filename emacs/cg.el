@@ -1,9 +1,10 @@
 ;;; cg.el --- major mode for editing Constraint Grammar files  -*- lexical-binding: t; coding: utf-8 -*-
 
-;; Copyright (C) 2010-2017 Kevin Brubeck Unhammer
+;; Copyright (C) 2010-2018 Kevin Brubeck Unhammer
 
 ;; Author: Kevin Brubeck Unhammer <unhammer@fsfe.org>
-;; Version: 0.3.0
+;; Version: 0.3.1
+;; Package-Requires: ((emacs "24.3"))
 ;; Url: https://visl.sdu.dk/constraint_grammar.html
 ;; Keywords: languages
 
@@ -66,7 +67,7 @@
 
 ;;; Code:
 
-(defconst cg-version "0.3.0" "Version of cg-mode.")
+(defconst cg-version "0.3.1" "Version of cg-mode.")
 
 (eval-when-compile (require 'cl))
 (require 'cl-lib)
@@ -214,6 +215,7 @@ Don't change without re-evaluating the file.")
 				"AFTER"
 				"BEFORE"
 				"WITH"
+				"FROM"
 				"TO")
   "Context flags used for highlighting.
 Don't change without re-evaluating the file.")
@@ -599,6 +601,9 @@ select the whole string \"SELECT:1022:rulename\")."
   "Which CG file the `cg-output-mode' (and `cg--check-cache-buffer')
 buffer corresponds to.")
 (make-variable-buffer-local 'cg--file)
+(defvar cg--input-buffer nil
+  "Which CG input buffer the `cg-mode' buffer corresponds to.")
+(make-variable-buffer-local 'cg--input-buffer)
 (defvar cg--tmp nil     ; TODO: could use cg--file iff buffer-modified-p
   "Which temporary file was sent in lieu of `cg--file' to
 compilation (in case the buffer of `cg--file' was not saved)")
@@ -616,10 +621,17 @@ to.")
     (let ((filename (or filename (buffer-file-name))))
       (file-name-nondirectory (file-name-sans-extension filename)))))
 
-(defun cg-edit-input ()
-  "Open a buffer to edit the input sent when running `cg-check'."
-  (interactive)
-  (pop-to-buffer (cg-input-buffer (buffer-file-name))))
+
+(defun cg-edit-input (&optional pick-buffer)
+  "Open a buffer to edit the input sent when running `cg-check'.
+With prefix argument PICK-BUFFER, prompt for a buffer (e.g. a
+text file you've already opened) to use as CG input buffer."
+  (interactive "P")
+  (when pick-buffer
+    (setq-local cg--input-buffer (get-buffer
+                                  (read-buffer-to-switch "Use as input buffer: "))))
+  (pop-to-buffer
+   (cg--get-input-buffer (buffer-file-name))))
 
 ;;;###autoload
 (defcustom cg-check-do-cache t
@@ -660,18 +672,36 @@ or call `cg-check' from another CG file)."
 
 
 ;;;###autoload
-(defcustom cg-per-buffer-input nil
-  "If this is non-nil, the input buffer created by
-`cg-edit-input' will be specific to the CG buffer it was called
-from, otherwise all CG buffers share one input buffer."
-  :type 'string)
+(defcustom cg-per-buffer-input 'pipe
+  "Make input buffers specific to their source CG's.
 
-(defun cg-input-buffer (file)
-  (let ((buf (get-buffer-create (concat "*CG input"
-                                        (if cg-per-buffer-input
-                                            (concat " for " (file-name-base file))
-                                          "")
-                                        "*"))))
+If it is 'pipe (the default), input buffers will be shared by all
+CG's that have the same value for `cg-pre-pipe'.
+
+If this is 'buffer or t, the input buffer created by
+`cg-edit-input' will be specific to the CG buffer it was called
+from.
+
+If it is nil, all CG buffers share one input buffer."
+  :type 'symbol)
+
+(defun cg--input-buffer-name (file)
+  "Create a name for the input buffer for FILE."
+  (format "*CG input%s*"
+          (pcase cg-per-buffer-input
+            ('nil "")
+            ('pipe (concat " for " cg-pre-pipe))
+            (_ (concat " for " (file-name-base file))))))
+
+(defun cg--get-input-buffer (file)
+  "Return a (possibly new) input buffer.
+If `cg-per-buffer-input' is t, the buffer will have be named
+after FILE; if it is 'pipe, the buffer will be named after the
+`cg-pre-pipe'."
+  (let ((buf (if (buffer-live-p cg--input-buffer)
+                 cg--input-buffer
+               (get-buffer-create (cg--input-buffer-name file)))))
+    (setq-local cg--input-buffer buf)
     (with-current-buffer buf
       (cg-input-mode)
       (setq cg--file file))
@@ -721,6 +751,9 @@ That hook is useful for doing things like
 
 (defvar cg-output-mapping-face 'bold
   "Face name to use for mapping tags in cg-output.")
+
+(defvar cg-output-highlight-face 'font-lock-variable-name-face
+  "Face name to use for highlighting symbol at point in grammar in cg-output.")
 
 (defvar cg-output-mode-font-lock-keywords
   '(("^;\\(?:[^:]* \\)"
@@ -810,8 +843,9 @@ runs."
 (defun cg-output-show-all ()
   "Undo the effect of `cg-output-hide-analyses'."
   (interactive)
-  (setq cg--output-hiding-analyses nil)
-  (remove-overlays (point-min) (point-max) 'invisible 'cg-output))
+  (with-current-buffer (cg-output-buffer)
+    (setq cg--output-hiding-analyses nil)
+    (remove-overlays (point-min) (point-max) 'invisible 'cg-output)))
 
 (defun cg-output-hide-analyses ()
   "Hide all analyses.
@@ -823,26 +857,27 @@ keywords etc.
 Call `cg-output-set-unhide' to set a regex which will be exempt
 from hiding.  Call `cg-output-show-all' to turn off all hiding."
   (interactive)
-  (setq cg--output-hiding-analyses t)
-  (let (prev)
-    (save-excursion
-      (goto-char (point-min))
-      (while (re-search-forward "^\"<.*>\"" nil 'noerror)
-	(let ((line-beg (match-beginning 0))
-	      (line-end (match-end 0)))
-	  (cg-output-hide-region line-beg (+ line-beg 2)) ; "<
-	  (cg-output-hide-region (- line-end 2) line-end) ; >"
-	  (when prev
-	    (if (save-excursion (re-search-backward cg-sent-tag prev 'noerror))
-		(cg-output-hide-region prev (- line-beg 1))	; show newline
-	      (cg-output-hide-region prev line-beg))) ; hide newline too
-	  (setq prev line-end)))
-      (goto-char prev)
-      (when (re-search-forward "^[^\t\"]" nil 'noerror)
-	(cg-output-hide-region prev (match-beginning 0)))))
+  (with-current-buffer (cg-output-buffer)
+    (setq cg--output-hiding-analyses t)
+    (let (prev)
+      (save-excursion
+        (goto-char (point-min))
+        (while (re-search-forward "^\"<.*>\"" nil 'noerror)
+          (let ((line-beg (match-beginning 0))
+                (line-end (match-end 0)))
+            (cg-output-hide-region line-beg (+ line-beg 2)) ; "<
+            (cg-output-hide-region (- line-end 2) line-end) ; >"
+            (when prev
+              (if (save-excursion (re-search-backward cg-sent-tag prev 'noerror))
+                  (cg-output-hide-region prev (- line-beg 1))	; show newline
+                (cg-output-hide-region prev line-beg))) ; hide newline too
+            (setq prev line-end)))
+        (goto-char prev)
+        (when (re-search-forward "^[^\t\"]" nil 'noerror)
+          (cg-output-hide-region prev (match-beginning 0)))))
 
-  (when cg-output-unhide-regex
-    (cg-output-unhide-some cg-output-unhide-regex)))
+    (when cg-output-unhide-regex
+      (cg-output-unhide-some cg-output-unhide-regex))))
 
 (defun cg-output-unhide-some (needle)
   (save-excursion
@@ -855,7 +890,7 @@ from hiding.  Call `cg-output-show-all' to turn off all hiding."
 	    (overlays-at (match-beginning 0))))))
 
 (defun cg-output-set-unhide (needle)
-  "Set some exeption to `cg-output-hide-analyses'.
+  "Make an exception to `cg-output-hide-analyses'.
 
 If NEEDLE is the empty string, hide all analyses.
 This is saved and reused whenever `cg-output-hide-analyses' is
@@ -870,14 +905,14 @@ called."
     (setq cg--output-unhide-history (cons needle cg--output-unhide-history)))
   (cg-output-hide-analyses))
 
-;;; TODO:
 (defun cg-output-toggle-analyses ()
   "Hide or show analyses from output.
 See `cg-output-hide-analyses'."
   (interactive)
-  (if cg--output-hiding-analyses
-      (cg-output-show-all)
-    (cg-output-hide-analyses)))
+  (with-current-buffer (cg-output-buffer)
+    (if cg--output-hiding-analyses
+        (cg-output-show-all)
+      (cg-output-hide-analyses))))
 
 
 
@@ -907,22 +942,23 @@ Use 0 to check immediately after each change."
 	  (with-demoted-errors (cg-check))))))))
 
 (defun cg-output-hl (cg-buffer)
+  "Highlight the symbol at point in the output buffer."
   (when (eq (current-buffer) cg-buffer)
     (let* ((sym (symbol-at-point))
-	   (sym-re (concat "[ \"]\\("
+	   (sym-re (concat "\\(?:^\\|[ \"(:]\\)\\("
 			   (regexp-quote (symbol-name sym))
-			   "\\)\\([\" ]\\|$\\)")))
+			   "\\)\\(?:[:)\" ]\\|$\\)")))
       ;; TODO: make regexp-opts of the LIST definitions and search
       ;; those as well?
       (with-current-buffer (cg-output-buffer)
 	(when (and sym
 		   (get-buffer-window)
 		   (not (cg-output-running)))
-	  (remove-overlays (point-min) (point-max) 'face 'lazy-highlight)
+	  (remove-overlays (point-min) (point-max) 'face cg-output-highlight-face)
 	  (goto-char (point-min))
 	  (while (re-search-forward sym-re nil 'noerror)
 	    (overlay-put (make-overlay (match-beginning 1) (match-end 1))
-			 'face 'lazy-highlight)))))))
+			 'face cg-output-highlight-face)))))))
 
 (defun cg-output-running ()
   (let ((proc (get-buffer-process (cg-output-buffer))))
@@ -975,7 +1011,7 @@ Similarly, `cg-post-pipe' is run on output."
        (cmd (concat
              cg-command " " cg-extra-args " --grammar " tmp
              post-pipe))
-       (in (cg-input-buffer file))
+       (in (cg--get-input-buffer file))
        (out (progn (write-region (point-min) (point-max) tmp)
                    (compilation-start
                     cmd
@@ -1056,6 +1092,61 @@ Similarly, `cg-post-pipe' is run on output."
                                     "Not checking CG")))
 
 
+
+
+;;; xref support --------------------------------------------------------------
+
+(when (featurep 'xref)
+  (declare-function xref-make-bogus-location "xref" (message))
+  (declare-function xref-make "xref" (summary location))
+  (declare-function xref-collect-references "xref" (symbol dir))
+
+  (cl-defmethod xref-backend-identifier-at-point ((_backend (eql cg)))
+    (format "%s" (symbol-at-point)))
+
+  (defvar cg--set-definition-re "^ *\\(?:[Ll][Ii][Ss]\\|[Ss][Ee]\\)t\\s +\\(%s\\)\\(?:\\s \\|=\\)")
+
+  (cl-defmethod xref-backend-identifier-completion-table ((_backend (eql cg)))
+    (completion-table-dynamic
+     (lambda (prefix)
+       (let* ((prefix-re (concat (replace-quote prefix)
+                                 "\\S *"))
+              (def-re (format cg--set-definition-re prefix-re))
+              matches)
+         (save-excursion
+           (save-restriction
+             (widen)
+             (goto-char (point-min))
+             (while (re-search-forward def-re nil 'noerror)
+               (push (match-string-no-properties 1) matches))))
+         matches))
+     'switch-buffer))
+
+  (cl-defmethod xref-backend-definitions ((_backend (eql cg)) symbol)
+    (let* ((loc
+            (save-excursion
+              (save-restriction
+                (widen)
+                (goto-char (point-min))
+                (and
+                 (re-search-forward (format cg--set-definition-re symbol) nil 'noerror)
+                 (xref-make-file-location (buffer-file-name)
+                                          (line-number-at-pos) ; TODO: this is slow!
+                                          (current-column)))))))
+      (when loc
+        (list (xref-make (format "%s" symbol) loc)))))
+
+  (cl-defmethod xref-backend-references ((_backend (eql cg)) symbol)
+    (message "Not yet implemented")
+    nil)
+
+  (defun cg--xref-backend () 'cg)
+  (add-hook 'cg-mode-hook
+            (defun cg--setup-xref ()
+              (define-key cg-mode-map (kbd "M-.") 'xref-find-definitions)
+              (add-hook 'xref-backend-functions #'cg--xref-backend nil t))))
+
+
 ;;; Keybindings ---------------------------------------------------------------
 (define-key cg-mode-map (kbd "C-c C-o") #'cg-occur-list)
 (define-key cg-mode-map (kbd "C-c C-r") #'cg-goto-rule)
@@ -1064,6 +1155,8 @@ Similarly, `cg-post-pipe' is run on output."
 (define-key cg-mode-map (kbd "C-c M-c") #'cg-toggle-check-after-change)
 (define-key cg-mode-map (kbd "C-;") #'cg-comment-or-uncomment-rule)
 (define-key cg-mode-map (kbd "M-#") #'cg-comment-or-uncomment-rule)
+(define-key cg-mode-map (kbd "C-c C-u") #'cg-output-set-unhide)
+(define-key cg-mode-map (kbd "C-c C-v") #'cg-output-toggle-analyses)
 
 (define-key cg-output-mode-map (kbd "C-c C-i") #'cg-back-to-file-and-edit-input)
 (define-key cg-output-mode-map (kbd "i") #'cg-back-to-file-and-edit-input)

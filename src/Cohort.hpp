@@ -43,8 +43,7 @@ enum {
 	CT_DEP_DONE    = (1 <<  4),
 };
 
-// ToDo: Would love to make this a constexpr global, but that's C++11
-#define DEP_NO_PARENT std::numeric_limits<uint32_t>::max()
+constexpr auto DEP_NO_PARENT = std::numeric_limits<uint32_t>::max();
 
 class Cohort {
 public:
@@ -71,6 +70,7 @@ public:
 	CohortVector removed;
 	RelationCtn relations;
 	RelationCtn relations_input;
+	uint32_t line_number = 0;
 
 	double getMin(uint32_t key);
 	double getMax(uint32_t key);
@@ -83,12 +83,14 @@ public:
 
 	void addChild(uint32_t child);
 	void remChild(uint32_t child);
+	void appendReading(Reading* read, ReadingList& readings);
 	void appendReading(Reading* read);
 	Reading* allocateAppendReading();
 	Reading* allocateAppendReading(Reading& r);
 	bool addRelation(uint32_t rel, uint32_t cohort);
 	bool setRelation(uint32_t rel, uint32_t cohort);
 	bool remRelation(uint32_t rel, uint32_t cohort);
+	void setRelated();
 
 private:
 	void updateMinMax();
